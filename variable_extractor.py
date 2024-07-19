@@ -2,52 +2,120 @@ import os
 import json
 from typing import Callable
 from bs4 import BeautifulSoup
+import numpy as np
 import pandas as pd
 import ollama
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import chromadb
 
 
+class CaseDirectory:
+    def __init__(self, parent_directory: str) -> None:
+        """
+        Provides methods for handling directory of case documents
+        Assumes parent directory contains court directories
+        Each court directory contains docket directories
+        Each docket directory contains metadata.json, docs.json,
+        and a directory containing all documents (documents can be in subdirectories)
+        """
+        self.parent_directory = parent_directory
+        self.metadata_paths = self._get_metadata_paths()
+    
+    def _get_metadata_paths(self) -> list[str]:
+        """
+        Returns list of paths for each case metadata file
+        """
+        court_folders = [f.path for f in os.scandir(self.parent_directory) if f.is_dir()]
+        case_folders = []
+        for court_folder in court_folders:
+            case_folders += [f.path for f in os.scandir(court_folder) if f.is_dir]
+        metadata_paths = []
+        for folder in case_folders:
+            path = os.path.join(folder, "metadata.json")
+            if os.path.isfile(path):
+                metadata_paths.append(path)
+        return metadata_paths
+    
+    def get_metadata_json(self, fields=["court", "title", "docket", "judges",
+                                        "judge", "type", "link", "status", "flags",
+                                        "nature_of_suit", "cause", "magistrate"]
+                                        ) -> list[dict]:
+        return [CaseMetadata.from_path(path).get_metadata_json(fields) for path in self.metadata_paths]
+    
+    def convert_to_text(self) -> None:
+        """
+        Converts all documents missing a file extension in directory to text files
+        """
+        self._convert_to_text(self.parent_directory)
+
+    def _convert_to_text(self, parent) -> None:
+        """
+        Converts all documents missing a file extension in directory to text files
+        """
+        for f in os.listdir(parent):
+            path = os.path.join(parent, f)
+            if os.path.isfile(path):
+                _, ext = os.path.splitext(path)
+                if ext == "":
+                    os.rename(path, path+".txt")
+            if os.path.isdir(path):
+                self._convert_to_text(path)
+    
+    def get_proportion_downloaded(self) -> float:
+        """
+        returns proportion of total documents downloaded
+        """
+        downloaded_count = sum((CaseMetadata.from_path(path).get_downloaded_document_count() for path in self.metadata_paths))
+        total_count = sum((CaseMetadata.from_path(path).get_total_document_count() for path in self.metadata_paths))
+        return np.round(downloaded_count/total_count, 2)
+    
+    def get_mean_downloaded_per_case(self) -> float:
+        """
+        returns the average proportion of documents downloaded per case
+        """
+        return np.round(np.mean([CaseMetadata.from_path(path).get_proportion_downloaded() for path in self.metadata_paths]), 2)
+
+
 class CaseMetadata:
     def __init__(self, metadata: str, path: str) -> None:
         self.metadata = json.loads(metadata)
         self.path = path
+        self.docs_json = self._get_docs_json()
 
     @classmethod
     def from_path(cls, path: str) -> "CaseMetadata":
+        """
+        Initializes CaseMetadata from path to metadata.json
+        """
         with open(path) as f:
             return cls(f.read(), path)
+    
+    def get_metadata_json(self, fields=["court", "title", "docket", "judges",
+                                        "judge", "type", "link", "status", "flags",
+                                        "nature_of_suit", "cause", "magistrate"]
+                                        ) -> dict:
+        """
+        returns json of standard case metadata (not including docket_report)
+        """
+        return {field: self.get_info_field(field) for field in fields} | {"metadata_path": self.path}
+
+    def _get_docs_json(self) -> list[dict]:
+        docs_path = self.path.replace("metadata", "docs")
+        with open(docs_path) as f:
+            return json.loads(f.read())
+
+    def get_info_field(self, field: str) -> list[str]|str|float:
+        """
+        Returns field from information section of metadata if it exists,
+        otherwise returns np.nan
+        Common fields: 
+        court, title, docket, judges, judge, type, link, status,
+        flags, nature_of_suit, cause, magistrate
+        """
+        if "info" in self.metadata and field in self.metadata["info"]:
+            return self.metadata["info"][field]
+        return np.nan
         
-    def get_court(self) -> str:
-        if "info" in self.metadata and "court" in self.metadata["info"]:
-            return self.metadata["info"]["court"]
-        return ""
-    
-    def get_case(self) -> str:
-        if "info" in self.metadata and "title" in self.metadata["info"]:
-            return self.metadata["info"]["title"]
-        return ""
-    
-    def get_docket(self) -> str:
-        if "info" in self.metadata and "docket" in self.metadata["info"]:
-            return self.metadata["info"]["docket"]
-        return ""
-    
-    def get_judges(self) -> str:
-        if "info" in self.metadata and "judges" in self.metadata["info"]:
-            return self.metadata["info"]["judges"]
-        return ""
-    
-    def get_type(self) -> str:
-        if "info" in self.metadata and "type" in self.metadata["info"]:
-            return self.metadata["info"]["type"]
-        return ""
-    
-    def get_link(self) -> str:
-        if "info" in self.metadata and "link" in self.metadata["info"]:
-            return self.metadata["info"]["link"]
-        return ""
-    
     def get_parties_dict(self) -> dict[str, list[str]]:
         """
         returns dictionary in the form 
@@ -66,7 +134,20 @@ class CaseMetadata:
     def get_docket_report(self) -> pd.DataFrame:
         """
         returns dataframe of docket_report entries with associated metadata
+        Adds column for path to document (if downloaded)
         """
+        def get_document_path(link_viewer):
+            case_link = self.get_info_field("link")
+            if type(case_link) == str and type(link_viewer) == str and case_link in link_viewer:
+                file = link_viewer.replace(case_link, "")
+                file = file[:-1] if file[-1] == "/" else file
+                file += ".txt"
+                parent = self.path.replace("metadata.json", "")
+                path = os.path.join(parent, file)
+                if os.path.isfile(path):
+                    return path
+            return ""
+        
         df = pd.json_normalize(self.metadata["docket_report"])
         if "number" in df.columns:
             df.number = pd.to_numeric(df.number)
@@ -76,6 +157,8 @@ class CaseMetadata:
             df.entry_date = pd.to_datetime(df.entry_date)
         if "contents" in df.columns:
             df.contents = df.contents.apply(lambda html: BeautifulSoup(html).text)
+        if "link_viewer" in df.columns:
+            df["document_path"] = df.link_viewer.apply(get_document_path)
         return df
 
     def get_docket_report_content(self) -> list[str]:
@@ -94,7 +177,7 @@ class CaseMetadata:
         """
         returns list of documents found in 
         subdirectory of metadata parent folder
-        (assumes only one subdirectory)
+        (checks all subdirectories within parent folder)
         """
         def search_subdirectory(path: str) -> list[str]:
             docs = []
@@ -106,8 +189,17 @@ class CaseMetadata:
                         docs.append(f.read())
             return docs
         parent_directory = os.path.dirname(self.path)
-        document_path = [f.path for f in os.scandir(parent_directory) if os.path.isdir(f)][0]
-        return search_subdirectory(document_path)
+        documents = []
+        for f in os.scandir(parent_directory):
+            if os.path.isdir(f):
+                documents += search_subdirectory(f.path)
+        return documents
+    
+    def get_total_document_count(self) -> int:
+        return len(self.get_docket_report_content())
+    
+    def get_downloaded_document_count(self) -> int:
+        return len(self.get_documents())
     
     def get_proportion_downloaded(self) -> float:
         """
@@ -115,9 +207,7 @@ class CaseMetadata:
         assumes each entry in docket_report is a document
         and each downloaded file is a separate document
         """
-        total_documents = len(self.get_docket_report_content())
-        downloaded_documents = len(self.get_documents())
-        return downloaded_documents/total_documents
+        return self.get_downloaded_document_count()/self.get_total_document_count()
     
 class VariableExtractor:
     def __init__(self,
@@ -286,6 +376,25 @@ class VariableExtractor:
         log["document_response"] = document_resp
         log["document_context"] = document_context
         return (document_resp, log)
+    
+    def summarize(self, document) -> str:
+        """
+        summarizes legal document
+        """
+        system_prompt = """
+        You are an expert legal analyst. The user message will contain a sequence of documents related to a legal case in the United States.
+        Your task is to summarize the events of the case. Describe each document in 10 words or less.
+        Documents may contain metadata such as filing date or the name of the person issuing the document. These are not important, do not include them in your answer.
+        Documents may include extra symbols or numbers that do not describe what the document is. Do not include these in your answer.
+        Do not summarize each document. Only summarize the major events during the case. If multiple documents describe redundant information, combine them into one description.
+        """
+        return ollama.generate(
+            model=self.language_model,
+            prompt=document,
+            system=system_prompt,
+            options={"num_ctx": self.llm_context_length},
+        )["response"]
+
 
 class JuryRulingClassifier(VariableExtractor):
     def __init__(self,

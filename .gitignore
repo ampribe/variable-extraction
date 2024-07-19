@@ -1,1 +1,5 @@
 venv
+100_random_sample
+100_random_fed
+.ipynb_checkpoints
+__pycache__
