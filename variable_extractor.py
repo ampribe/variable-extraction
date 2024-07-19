@@ -2,6 +2,7 @@ import os
 import json
 from typing import Callable
 from bs4 import BeautifulSoup
+import pandas as pd
 import ollama
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import chromadb
@@ -22,6 +23,31 @@ class CaseMetadata:
             return self.metadata["info"]["court"]
         return ""
     
+    def get_case(self) -> str:
+        if "info" in self.metadata and "title" in self.metadata["info"]:
+            return self.metadata["info"]["title"]
+        return ""
+    
+    def get_docket(self) -> str:
+        if "info" in self.metadata and "docket" in self.metadata["info"]:
+            return self.metadata["info"]["docket"]
+        return ""
+    
+    def get_judges(self) -> str:
+        if "info" in self.metadata and "judges" in self.metadata["info"]:
+            return self.metadata["info"]["judges"]
+        return ""
+    
+    def get_type(self) -> str:
+        if "info" in self.metadata and "type" in self.metadata["info"]:
+            return self.metadata["info"]["type"]
+        return ""
+    
+    def get_link(self) -> str:
+        if "info" in self.metadata and "link" in self.metadata["info"]:
+            return self.metadata["info"]["link"]
+        return ""
+    
     def get_parties_dict(self) -> dict[str, list[str]]:
         """
         returns dictionary in the form 
@@ -37,6 +63,21 @@ class CaseMetadata:
                         parties["defendant"].append(party["name"])
         return parties
     
+    def get_docket_report(self) -> pd.DataFrame:
+        """
+        returns dataframe of docket_report entries with associated metadata
+        """
+        df = pd.json_normalize(self.metadata["docket_report"])
+        if "number" in df.columns:
+            df.number = pd.to_numeric(df.number)
+        if "date" in df.columns:
+            df.date = pd.to_datetime(df.date)
+        if "entry_date" in df.columns:
+            df.entry_date = pd.to_datetime(df.entry_date)
+        if "contents" in df.columns:
+            df.contents = df.contents.apply(lambda html: BeautifulSoup(html).text)
+        return df
+
     def get_docket_report_content(self) -> list[str]:
         """
         returns list of docket_report entries 
@@ -67,6 +108,16 @@ class CaseMetadata:
         parent_directory = os.path.dirname(self.path)
         document_path = [f.path for f in os.scandir(parent_directory) if os.path.isdir(f)][0]
         return search_subdirectory(document_path)
+    
+    def get_proportion_downloaded(self) -> float:
+        """
+        returns proportion of documents downloaded
+        assumes each entry in docket_report is a document
+        and each downloaded file is a separate document
+        """
+        total_documents = len(self.get_docket_report_content())
+        downloaded_documents = len(self.get_documents())
+        return downloaded_documents/total_documents
     
 class VariableExtractor:
     def __init__(self,
