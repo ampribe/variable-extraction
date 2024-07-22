@@ -83,6 +83,9 @@ class VariableExtractor:
         self.document_separator = document_separator
         self.llm_context_length = llm_context_length
 
+        self.log = ({"metadata_path": metadata_path,
+                     "case_metadata": self.metadata.get_metadata_json(), "system_prompt": prompt})
+
     def _chunk_text_list(self, text_list: list[str]) -> list[str]:
         """
         chunks list of texts using parameters given to constructor
@@ -149,12 +152,12 @@ class VariableExtractor:
             options={"num_ctx": self.llm_context_length},
             format="json",
         )
-        return (json.loads(response["response"]), context)
+        return (response, context)
 
     def _extract_from_metadata(self) -> tuple[dict[str, str], str]:
         """
-        queries llm with docket_report content
-        returns tuple of response and documents provided as context
+        queries llm with docket_report content and logs query
+        returns response as json
         """
         print("Extracting from metadata...")
         print("- Getting relevant chunks...")
@@ -165,7 +168,13 @@ class VariableExtractor:
                 "No relevant docket_report entries",
             )
         print("- Querying llm...")
-        return self._query_llm(relevant_chunks)
+        response, context = self._query_llm(relevant_chunks)
+        response_json = json.loads(response["response"]) # pylint: disable=unsubscriptable-object
+        self.log["metadata_response"] = response
+        self.log["metadata_response_json"] = response_json
+        self.log["metadata_context"] = context
+        return response_json
+
 
     def _extract_from_documents(self) -> tuple[dict[str, str], str]:
         """
@@ -173,7 +182,7 @@ class VariableExtractor:
         only uses documents associated with relevant docket_report entry
 
         returns:
-            tuple of response and documents provided as context
+            response as json
         """
         print("Extracting from documents...")
         print("- Getting relevant chunks...")
@@ -182,7 +191,12 @@ class VariableExtractor:
         if len(relevant_chunks) == 0:
             return ({self.variable_tag: self.null_value}, "No relevant documents")
         print("- Querying llm...")
-        return self._query_llm(relevant_chunks)
+        response, context = self._query_llm(relevant_chunks)
+        response_json = json.loads(response["response"]) # pylint: disable=unsubscriptable-object
+        self.log["document_response"] = response
+        self.log["document_response_json"] = response_json
+        self.log["document_context"] = context
+        return response_json
 
     def extract(self) -> tuple[dict[str, str], dict[str, str]]:
         """
@@ -190,18 +204,13 @@ class VariableExtractor:
 
         return tuple of response and log
         """
-        log = {}
-        metadata_resp, metadata_context = self._extract_from_metadata()
+        metadata_resp = self._extract_from_metadata()
         print(f"- Response: {metadata_resp}")
-        log["metadata_response"] = metadata_resp
-        log["metadata_context"] = metadata_context
         if metadata_resp[self.variable_tag] != self.null_value:
-            return (metadata_resp, log)
-        document_resp, document_context = self._extract_from_documents()
-        log["document_response"] = document_resp
-        log["document_context"] = document_context
+            return metadata_resp
+        document_resp = self._extract_from_documents()
         print(f"- Response: {document_resp}")
-        return (document_resp, log)
+        return document_resp
 
     def summarize(self, document) -> str:
         """
@@ -219,4 +228,4 @@ class VariableExtractor:
             prompt=document,
             system=system_prompt,
             options={"num_ctx": self.llm_context_length},
-        )["response"]
+        )["response"] # pylint: disable=unsubscriptable-object
