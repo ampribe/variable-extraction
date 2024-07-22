@@ -62,35 +62,38 @@ class BenchRulingClassifier(VariableExtractor):
         category should only include one of the following categories: plaintiff, defendant, undetermined.
         """
 
-        def keyword_filter(s):
-            party_keywords = [val for ls in parties_dict.values() for val in ls] + [
+        party_keywords = [val for ls in parties_dict.values() for val in ls] + [
                 "plaintiff",
                 "defendant",
             ]
-            def has_party(s: str) -> bool:
-                return any(map(lambda party: party.lower() in s.lower(), party_keywords))
-            result_keywords = [
-                "verdict",
-                "judgement",
-                "opinion",
-                "decision",
-                "decree",
-                "order",
-                "ruling",
-                "disposition",
-                "finding",
-                "trial",
-            ]
-            def has_result_keywords(s: str) -> bool:
-                return any([word in s.lower() for word in result_keywords])
+        def has_party(s: str) -> bool:
+            return any(map(lambda party: party.lower() in s.lower(), party_keywords))
+        result_keywords = [
+            "verdict",
+            "judgement",
+            "opinion",
+            "decision",
+            "decree",
+            "order",
+            "ruling",
+            "disposition",
+            "finding",
+            "trial",
+        ]
+        def has_result_keywords(s: str) -> bool:
+            return any([word in s.lower() for word in result_keywords])
+        def content_filter(s: str):
             return has_result_keywords(s) and has_party(s)
+        def title_filter(s: str):
+            return has_result_keywords(s)
 
         super().__init__(
             metadata_path,
             prompt,
             "category",
             "undetermined",
-            keyword_filter,
+            content_filter,
+            title_filter,
             embedding_model,
             separators,
             chunk_size,

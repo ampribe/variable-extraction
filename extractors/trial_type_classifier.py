@@ -68,13 +68,14 @@ class TrialTypeClassifier(VariableExtractor):
                 "finding",
                 "trial",
             ]
-            return any([word in s.lower() for word in result_keywords])
+            return any((word in s.lower() for word in result_keywords))
 
         super().__init__(
             metadata_path,
             prompt,
             "category",
             "undetermined",
+            keyword_filter,
             keyword_filter,
             embedding_model,
             separators,

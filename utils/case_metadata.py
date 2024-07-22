@@ -3,6 +3,7 @@ Module includes CaseMetadata class that provides methods for handling case docum
 """
 import os
 import json
+from typing import Callable
 from bs4 import BeautifulSoup
 import numpy as np
 import pandas as pd
@@ -18,6 +19,8 @@ class CaseMetadata:
         get_docket_report: returns metadata docket_report with paths to downloaded entries
         get_docket_report_contents: returns list of docket_report entries
         get_documents: returns list of all case document texts
+        get_documents_by_docket_report: returns list of case documents that have docket_report
+            entries that match given function
         get_total_document_count: returns number of documents included in docket_report
         get_downloaded_document_count: returns number of docket_report documents downloaded
         get_proportion_downloaded: returns proportion of documents downloaded
@@ -170,6 +173,23 @@ class CaseMetadata:
                 documents += search_subdirectory(f.path)
         return documents
 
+    def get_documents_by_docket_report(self, f: Callable[[str], bool]) -> list[str]:
+        """
+        Returns documents based on docket_report entry matching a keyword function
+        parameters:
+            f: function that returns boolean from docket_report contents string
+        returns: list of strings, each string corresponding to a different document
+        """
+        docs = []
+        docket_report = self.get_docket_report()
+        if "contents" in docket_report.columns and "document_path" in docket_report.columns:
+            mask = (docket_report.contents.apply(f)) & (docket_report.document_path != "")
+            paths = docket_report[mask].document_path.tolist()
+            for path in paths:
+                with open(path, errors="ignore", encoding="utf-8") as f:
+                    docs.append(f.read())
+        return docs
+
     def get_total_document_count(self) -> int:
         """
         returns total documents in docket_report
@@ -189,4 +209,3 @@ class CaseMetadata:
         and each downloaded file is a separate document
         """
         return self.get_downloaded_document_count() / self.get_total_document_count()
-

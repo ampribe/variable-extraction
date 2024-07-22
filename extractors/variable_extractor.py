@@ -22,7 +22,8 @@ class VariableExtractor:
         prompt: str,
         variable_tag: str,
         null_value: str,
-        filter_function: Callable[[str], bool],
+        content_filter: Callable[[str], bool],
+        title_filter: Callable[[str], bool],
         embedding_model: str = "mxbai-embed-large",
         separators: list[str]|None = None,
         chunk_size: int = 700,
@@ -40,7 +41,8 @@ class VariableExtractor:
             variable_tag: name of variable of interest in json returned by llm eg. "variable"
             null_value: value for variable in json that indicates extraction failed
                 (used to query documents if metadata query fails) eg. "unknown"
-            filter_function: function used to filter text chunks, takes string and return boolean
+            content_filter: function used to filter content of text chunks
+            title_filter: function used to filter documents based on title in docket_report
             embedding_model: model used to generate prompt and text embedding,
                 models available: https://ollama.com/blog/embedding-models
             separators: separators used to chunk text in order of preference
@@ -58,7 +60,8 @@ class VariableExtractor:
         self.prompt = prompt
         self.variable_tag = variable_tag
         self.null_value = null_value
-        self.filter_function = filter_function
+        self.content_filter = content_filter
+        self.title_filter = title_filter
         self.embedding_model = embedding_model
         self.separators = [
             "\n\n",
@@ -96,9 +99,9 @@ class VariableExtractor:
 
     def _filter_by_keyword_function(self, text_list: list[str]) -> list[str]:
         """
-        filters texts by provided keyword filtering function
+        filters texts by provided content filtering function
         """
-        return [text for text in text_list if self.filter_function(text)]
+        return [text for text in text_list if self.content_filter(text)]
 
     def _filter_by_semantic_similarity(self, text_list: list[str]) -> list[str]:
         """
@@ -153,22 +156,32 @@ class VariableExtractor:
         queries llm with docket_report content
         returns tuple of response and documents provided as context
         """
+        print("Extracting from metadata...")
+        print("- Getting relevant chunks...")
         relevant_chunks = self._get_relevant_chunks(self.metadata.get_docket_report_contents())
         if len(relevant_chunks) == 0:
             return (
                 {self.variable_tag: self.null_value},
                 "No relevant docket_report entries",
             )
+        print("- Querying llm...")
         return self._query_llm(relevant_chunks)
 
     def _extract_from_documents(self) -> tuple[dict[str, str], str]:
         """
-        queries llm with relevant chunks from documents
-        returns tuple of response and documents provided as context
+        queries llm with relevant chunks from documents,
+        only uses documents associated with relevant docket_report entry
+
+        returns:
+            tuple of response and documents provided as context
         """
-        relevant_chunks = self._get_relevant_chunks(self.metadata.get_documents())
+        print("Extracting from documents...")
+        print("- Getting relevant chunks...")
+        relevant_docs = self.metadata.get_documents_by_docket_report(self.title_filter)
+        relevant_chunks = self._get_relevant_chunks(relevant_docs)
         if len(relevant_chunks) == 0:
             return ({self.variable_tag: self.null_value}, "No relevant documents")
+        print("- Querying llm...")
         return self._query_llm(relevant_chunks)
 
     def extract(self) -> tuple[dict[str, str], dict[str, str]]:
@@ -179,6 +192,7 @@ class VariableExtractor:
         """
         log = {}
         metadata_resp, metadata_context = self._extract_from_metadata()
+        print(f"- Response: {metadata_resp}")
         log["metadata_response"] = metadata_resp
         log["metadata_context"] = metadata_context
         if metadata_resp[self.variable_tag] != self.null_value:
@@ -186,6 +200,7 @@ class VariableExtractor:
         document_resp, document_context = self._extract_from_documents()
         log["document_response"] = document_resp
         log["document_context"] = document_context
+        print(f"- Response: {document_resp}")
         return (document_resp, log)
 
     def summarize(self, document) -> str:
