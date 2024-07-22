@@ -3,3 +3,4 @@ venv
 100_random_fed
 .ipynb_checkpoints
 __pycache__
+.DS_Store
