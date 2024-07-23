@@ -3,6 +3,7 @@ Module includes CaseDirectory path that provides utility functions for handling 
 """
 import os
 import numpy as np
+import pandas as pd
 from utils.case_metadata import CaseMetadata
 
 class CaseDirectory:
@@ -63,6 +64,7 @@ class CaseDirectory:
     ) -> list[dict]:
         """
         returns list of metadata.json contents for each case included in directory
+        includes above fields and metadata_path
         """
         return [
             CaseMetadata.from_metadata_path(path).get_metadata_json(fields)
@@ -117,3 +119,13 @@ class CaseDirectory:
             ),
             2,
         )
+
+    def categorize_cases(self, title: str) -> None:
+        """
+        Writes case metadata with additional trial column 
+        (whether case went to trial) to categories.csv
+        """
+        df = pd.DataFrame(self.get_metadata_json())
+        df["trial"] = list(CaseMetadata.from_metadata_path(path).categorize_trial()
+                       for path in df.metadata_path)
+        df.to_csv(title, index=False)

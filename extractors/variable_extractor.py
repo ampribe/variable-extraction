@@ -186,7 +186,7 @@ class VariableExtractor:
         """
         print("Extracting from documents...")
         print("- Getting relevant chunks...")
-        relevant_docs = self.metadata.get_documents_by_docket_report(self.title_filter)
+        relevant_docs = self.metadata.get_documents_by_docket_report_filter(self.title_filter).values()
         relevant_chunks = self._get_relevant_chunks(relevant_docs)
         if len(relevant_chunks) == 0:
             return ({self.variable_tag: self.null_value}, "No relevant documents")
@@ -223,9 +223,10 @@ class VariableExtractor:
         Documents may include extra symbols or numbers that do not describe what the document is. Do not include these in your answer.
         Do not summarize each document. Only summarize the major events during the case. If multiple documents describe redundant information, combine them into one description.
         """
-        return ollama.generate(
+        resp = ollama.generate(
             model=self.language_model,
             prompt=document,
             system=system_prompt,
             options={"num_ctx": self.llm_context_length},
-        )["response"] # pylint: disable=unsubscriptable-object
+        )
+        return resp["response"]  # pylint: disable=unsubscriptable-object
