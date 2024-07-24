@@ -2,6 +2,7 @@
 Module includes VariableExtractor class
 """
 import json
+import regex as re
 from typing import Callable
 import ollama
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -88,6 +89,11 @@ class VariableExtractor:
         """
         chunks list of texts using parameters given to constructor
         """
+        paragraphs = []
+        for text in text_list:
+            paragraphs += re.split(r"\n\s*\n", text.strip())
+        return paragraphs
+    """
         text_splitter = RecursiveCharacterTextSplitter(
             separators=self.separators,
             chunk_size=self.chunk_size,
@@ -97,7 +103,7 @@ class VariableExtractor:
         for text in text_list:
             components += text_splitter.split_text(text)
         return components
-
+    """
     def _filter_by_keyword_function(self, text_list: list[str]) -> list[str]:
         """
         filters texts by provided content filtering function
