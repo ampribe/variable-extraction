@@ -82,9 +82,7 @@ class VariableExtractor:
         self.llm_document_count = llm_document_count
         self.document_separator = document_separator
         self.llm_context_length = llm_context_length
-
-        self.log = ({"metadata_path": metadata_path,
-                     "case_metadata": self.metadata.get_metadata_json(), "system_prompt": prompt})
+        self.log = {"system_prompt": prompt, "metadata_path": metadata_path, "title": self.metadata.get_info_field("title")}
 
     def _chunk_text_list(self, text_list: list[str]) -> list[str]:
         """
@@ -169,7 +167,10 @@ class VariableExtractor:
             )
         print("- Querying llm...")
         response, context = self._query_llm(relevant_chunks)
-        response_json = json.loads(response["response"]) # pylint: disable=unsubscriptable-object
+        try:
+            response_json = json.loads(response["response"]) # pylint: disable=unsubscriptable-object
+        except json.JSONDecodeError:
+            response_json = {}
         self.log["metadata_response"] = response
         self.log["metadata_response_json"] = response_json
         self.log["metadata_context"] = context
@@ -192,25 +193,33 @@ class VariableExtractor:
             return ({self.variable_tag: self.null_value}, "No relevant documents")
         print("- Querying llm...")
         response, context = self._query_llm(relevant_chunks)
-        response_json = json.loads(response["response"]) # pylint: disable=unsubscriptable-object
+        try:
+            response_json = json.loads(response["response"]) # pylint: disable=unsubscriptable-object
+        except json.JSONDecodeError:
+            response_json = {}
         self.log["document_response"] = response
         self.log["document_response_json"] = response_json
         self.log["document_context"] = context
         return response_json
 
-    def extract(self) -> tuple[dict[str, str], dict[str, str]]:
+    def extract(self) -> str:
         """
         first checks metadata for variable, then checks documents
 
-        return tuple of response and log
+        return string response
         """
         metadata_resp = self._extract_from_metadata()
         print(f"- Response: {metadata_resp}")
-        if metadata_resp[self.variable_tag] != self.null_value:
-            return metadata_resp
+        if self.variable_tag in metadata_resp and metadata_resp[self.variable_tag]!=self.null_value:
+            self.log["category"] = metadata_resp[self.variable_tag]
+            return metadata_resp[self.variable_tag]
         document_resp = self._extract_from_documents()
         print(f"- Response: {document_resp}")
-        return document_resp
+        if self.variable_tag in document_resp:
+            self.log["category"] = document_resp[self.variable_tag]
+            return document_resp[self.variable_tag]
+        self.log["category"] = self.null_value
+        return self.null_value
 
     def summarize(self, document) -> str:
         """

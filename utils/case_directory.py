@@ -5,6 +5,8 @@ import os
 import numpy as np
 import pandas as pd
 from utils.case_metadata import CaseMetadata
+from extractors.bench_ruling_classifier import BenchRulingClassifier
+from extractors.jury_ruling_classifier import JuryRulingClassifier
 
 class CaseDirectory:
     """
@@ -120,12 +122,50 @@ class CaseDirectory:
             2,
         )
 
-    def categorize_cases(self, title: str) -> None:
+    def write_metadata(self, title: str) -> None:
         """
-        Writes case metadata with additional trial column 
-        (whether case went to trial) to categories.csv
+        Writes case metadata with additional trial and trial type column s
         """
         df = pd.DataFrame(self.get_metadata_json())
-        df["trial"] = list(CaseMetadata.from_metadata_path(path).categorize_trial()
-                       for path in df.metadata_path)
+        metadata = [CaseMetadata.from_metadata_path(path) for path in df.metadata_path]
+
+        df["trial"] = [m.categorize_trial() for m in metadata]
+        df["trial_type"] = ([m.categorize_trial_type() if df.iloc[i].trial
+                             else "unknown" for i, m in enumerate(metadata)])
         df.to_csv(title, index=False)
+    
+    def categorize_outcomes(self, metadata_title: str, log_title: str, language_model: str = "llama3.1") -> None:
+        """
+        Categorizes outcomes of cases with trials
+        Parameters:
+            metadata_title: filename of metadata file generated using write_metadata
+            log_title: title of log file (can be partial if some cases already categorized)
+        """
+        def categorize_row(row):
+            if row["trial_type"] == "bench":
+                classifier = BenchRulingClassifier(row["metadata_path"], language_model=language_model)
+                return (classifier.extract(), classifier.log)
+            classifier = JuryRulingClassifier(row["metadata_path"], language_model=language_model)
+            return (classifier.extract(), classifier.log)
+        metadata = pd.read_csv(metadata_title)
+        if os.path.isfile(log_title):
+            log = pd.read_csv(log_title)
+        else:
+            log = pd.DataFrame(columns=["system_prompt", "metadata_path", "title",
+                                        "metadata_response", "metadata_response_json",
+                                        "metadata_context", "document_response",
+                                        "document_response_json", "document_context"])
+        if "trial_result" not in metadata.columns:
+            metadata["trial_result"] = np.nan
+        num_cases = len(metadata[(metadata.trial_type != "unknown") & (metadata.trial_result.isna())])
+        print(f"Cases to categorize: {num_cases}")
+        i = 1
+        for index, row in metadata.iterrows():
+            if row["trial_type"] != "unknown" and pd.isna(row["trial_result"]):
+                print(f"Categorizing case {i}")
+                category, log_row = categorize_row(row)
+                metadata.loc[index, "trial_result"] = category
+                log.loc[len(log)] = log_row
+                log.to_csv(log_title, index=False)
+                metadata.to_csv(metadata_title, index=False)
+                i += 1

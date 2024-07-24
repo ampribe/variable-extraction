@@ -47,10 +47,10 @@ class JuryRulingClassifier(VariableExtractor):
 
         If the jury decided in favor of the plaintiff, classify the outcome as plaintiff. 
         The documents may refer to the plaintiff as "plaintiff" or by name. 
-        Here is a list of plaintiff names: {", ".join(parties_dict["plaintiff"])}
+        Here is a list of plaintiff names: {", ".join(parties_dict["plaintiff"][:min(5, len(parties_dict["plaintiff"]))])}
         If the jury decided in favor of the defendant, classify the outcome as defendant.
         The documents may refer to the defendant as "defendant" or by name.
-        Here is a list of defendant names: {", ".join(parties_dict["defendant"])}
+        Here is a list of defendant names: {", ".join(parties_dict["defendant"][:min(5, len(parties_dict["defendant"]))])}
         If the documents provided do not identify the jury verdict or the documents are ambiguous, classify the outcome as undetermined.
 
         Respond with a JSON object in the format "{{"reasoning": "...", "category": "..."}}"
@@ -76,12 +76,11 @@ class JuryRulingClassifier(VariableExtractor):
             "ruling",
             "disposition",
             "finding",
-            "trial",
         ]
         def has_result_keywords(s: str) -> bool:
-            return any((word.lower() in s.lower() for word in result_keywords))
+            return any((word.lower() in s.lower() for word in result_keywords)) or "trial" in s
         def content_filter(s: str):
-            return has_result_keywords(s) and has_party(s)
+            return has_result_keywords(s) and has_party(s) and "trial" in s
         def title_filter(s: str):
             return has_result_keywords(s)
         

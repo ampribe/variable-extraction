@@ -107,7 +107,7 @@ class CaseMetadata:
         text = str(self.get_docket_report_contents()).lower()
         words = ["verdict", "opinion", "findings", "ruling", "judgement"]
         return any((word in text for word in words)) and "trial" in text
-    
+
     def categorize_trial_type(self) -> str:
         """
         Determines whether trial was bench trial or jury trial
@@ -115,7 +115,7 @@ class CaseMetadata:
         """
         text = str(self.get_docket_report_contents()).lower()
         jury_words = ["juror", "jury", "verdict", "voir dire"]
-        bench_words = ["opinion", "bench brief", "findings", "voir dire", "bench ruling", "judgement"]
+        bench_words = ["opinion", "bench brief", "findings", "bench ruling", "judgement"]
         if any((word in text for word in jury_words)):
             return "jury"
         if any((word in text for word in bench_words)):
