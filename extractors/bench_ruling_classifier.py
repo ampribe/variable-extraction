@@ -59,11 +59,12 @@ class BenchRulingClassifier(VariableExtractor):
             "ruling",
             "disposition",
             "finding",
+            "trial"
         ]
         def has_result_keywords(s: str) -> bool:
-            return any((word.lower() in s.lower() for word in result_keywords)) or "trial" in s
+            return any((word.lower() in s.lower() for word in result_keywords))
         def content_filter(s: str):
-            return has_result_keywords(s) and has_party(s) and "trial" in s
+            return has_result_keywords(s) and has_party(s)
         def title_filter(s: str):
             return has_result_keywords(s)
 

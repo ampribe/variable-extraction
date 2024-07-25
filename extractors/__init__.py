@@ -1,6 +1,7 @@
 """
 Included modules and classes:
     extractor_config: ExtractorConfig (configuration file for VariableExtractor)
+    extractor_log: ExtractorLog (log file for variable extraction)
     variable_extractor: VariableExtractor (Base variable extraction class)
     VariableExtractor subclasses:
         bench_ruling_classifier: BenchRulingClassifier (classifies outcome of bench trial)

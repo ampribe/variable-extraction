@@ -10,6 +10,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 import chromadb
 from utils.case_metadata import CaseMetadata
 from extractors.extractor_config import ExtractorConfig
+from extractors.extractor_log import ExtractorLog
 
 class VariableExtractor(ABC):
     """
@@ -17,7 +18,6 @@ class VariableExtractor(ABC):
     Each subclass must implement _get_default_config
     Public Methods:
         extract: extracts variable from case
-
     """
     def __init__(self, metadata: CaseMetadata, config: ExtractorConfig|None = None) -> None:
         """
@@ -26,18 +26,18 @@ class VariableExtractor(ABC):
             config: ExtractorConfig for this extractor
         """
         self.metadata = metadata
-        if config is None:
-            self.config = self._get_default_config(metadata)
-        else:
-            self.config = config
-        self.log = self.metadata.get_metadata_json(
-            fields=("court","title","docket","judges","link")
-                ) | asdict(self.config)
+        self.config = config if config is not None else self._get_default_config(metadata)
+        self.log = ExtractorLog(
+            config=asdict(self.config),
+            metadata=self.metadata.get_metadata_json(fields=("court","title","docket","judges","link")))
 
     @staticmethod
     @abstractmethod
     def _get_default_config(metadata: CaseMetadata) -> ExtractorConfig:
-        pass
+        """
+        Generates default configuration for variable extractor 
+        Implemented by subclass
+        """
 
     @classmethod
     def from_metadata_path(cls, path: str, config: ExtractorConfig|None=None)->"VariableExtractor":
@@ -79,6 +79,9 @@ class VariableExtractor(ABC):
         filters documents by semantic similarity to embedding_model_prompt
         """
         client = chromadb.Client()
+        for collection in client.list_collections():
+            if collection.name == "case":
+                client.delete_collection("case")
         collection = client.create_collection("case")
         for i, text in enumerate(text_list):
             if len(text) > 0:
@@ -96,14 +99,18 @@ class VariableExtractor(ABC):
             n_results=self.config.llm_document_count
             )["documents"][0]
 
-    def _get_relevant_chunks(self, docs: list[str]) -> list[str]:
+    def _get_relevant_chunks(self, docs: list[str]) -> tuple[list[str], dict[str, list[str]]]:
         """
         Applies _chunk_text_list, _filter_by_keyword_function,
         _filter_by_semantic_similarity in order to text list
+        returns relevant chunks and log of filtering process
         """
-        return self._filter_by_semantic_similarity(
-            self._filter_by_keyword_function(self._chunk_text_list(docs))
-        )
+        log = {}
+        log["docs_before_chunking"] = docs
+        log["chunks"] = self._chunk_text_list(log["docs_before_chunking"])
+        log["chunks_after_keyword_filter"] = self._filter_by_keyword_function(log["chunks"])
+        log["chunks_after_semantic_filter"] = self._filter_by_semantic_similarity(log["chunks_after_keyword_filter"])
+        return (log["chunks_after_semantic_filter"], log)
 
     def _query_llm(self, context_documents: list[str]) -> tuple[dict[str, str], str]:
         """
@@ -118,36 +125,41 @@ class VariableExtractor(ABC):
             system=self.config.language_model_prompt,
             options={"num_ctx": self.config.llm_context_length},
             format="json",
-        )
+        )["response"] # pylint: disable=unsubscriptable-object
         return (response, context)
 
-    def _extract_from_metadata(self) -> tuple[dict[str, str], str]:
+    def _load_response(self, response) -> str:
+        """
+        Attempts to load json response from model
+        Returns null tag if failure
+        """
+        try:
+            return json.loads(response)[self.config.variable_tag] 
+        except:
+            return self.config.null_value
+
+    def _extract_from_metadata(self) -> str:
         """
         queries llm with docket_report content and logs query
         returns response as json
         """
         print("Extracting from metadata...")
         print("- Getting relevant chunks...")
-        relevant_chunks = self._get_relevant_chunks(self.metadata.get_docket_report_contents())
-        if len(relevant_chunks) == 0:
-            return (
-                {self.config.variable_tag: self.config.null_value},
-                "No relevant docket_report entries",
-            )
+        chunks, log = self._get_relevant_chunks(self.metadata.get_docket_report_contents())
+        log["llm_context"] = None
+        log["llm_response_raw"] = None
+        log["llm_response"] = self.config.null_value
+        self.log.update_metadata_classification(log)
+        if len(chunks) == 0:
+            return self.config.null_value
         print("- Querying llm...")
-        response, context = self._query_llm(relevant_chunks)
-        try:
-            response_json = json.loads(response["response"]) # pylint: disable=unsubscriptable-object
-        except json.JSONDecodeError:
-            response_json = {self.config.variable_tag: self.config.null_value,
-                             "Response": str(response), "Status": "Invalid JSON response"}
-        self.log["metadata_response"] = response
-        self.log["metadata_response_json"] = response_json
-        self.log["metadata_context"] = context
-        return response_json
+        log["llm_response_raw"], log["llm_context"] = self._query_llm(chunks)
+        log["llm_response"] = self._load_response(log["llm_response_raw"])
+        self.log.update_metadata_classification(log)
+        return log["llm_response"]
 
 
-    def _extract_from_documents(self) -> tuple[dict[str, str], str]:
+    def _extract_from_documents(self) -> str:
         """
         queries llm with relevant chunks from documents,
         only uses documents associated with relevant docket_report entry
@@ -157,21 +169,20 @@ class VariableExtractor(ABC):
         """
         print("Extracting from documents...")
         print("- Getting relevant chunks...")
-        relevant_docs = self.metadata.get_documents_by_docket_report_filter(self.config.title_filter).values()
-        relevant_chunks = self._get_relevant_chunks(relevant_docs)
-        if len(relevant_chunks) == 0:
-            return ({self.config.variable_tag: self.config.null_value}, "No relevant documents")
+        doc_dict = self.metadata.get_documents_by_docket_report_filter(self.config.title_filter)
+        chunks, log = self._get_relevant_chunks(list(doc_dict.values()))
+        log["docs_after_title_filter"] = list(doc_dict.values())
+        log["llm_context"] = None
+        log["llm_response_raw"] = None
+        log["llm_response"] = self.config.null_value
+        self.log.update_document_classification(log)
+        if len(chunks) == 0:
+            return self.config.null_value
         print("- Querying llm...")
-        response, context = self._query_llm(relevant_chunks)
-        try:
-            response_json = json.loads(response["response"]) # pylint: disable=unsubscriptable-object
-        except json.JSONDecodeError:
-            response_json = {self.config.variable_tag: self.config.null_value,
-                             "Response": str(response), "Status": "Invalid JSON response"}
-        self.log["document_response"] = response
-        self.log["document_response_json"] = response_json
-        self.log["document_context"] = context
-        return response_json
+        log["llm_response_raw"], log["llm_context"] = self._query_llm(chunks)
+        log["llm_response"] = self._load_response(log["llm_response_raw"])
+        self.log.update_document_classification(log)
+        return log["llm_response"]
 
     def extract(self) -> str:
         """
@@ -180,14 +191,6 @@ class VariableExtractor(ABC):
         return string response
         """
         metadata_resp = self._extract_from_metadata()
-        print(f"- Response: {metadata_resp}")
-        if self.config.variable_tag in metadata_resp and metadata_resp[self.config.variable_tag]!=self.config.null_value:
-            self.log["category"] = metadata_resp[self.config.variable_tag]
-            return metadata_resp[self.config.variable_tag]
-        document_resp = self._extract_from_documents()
-        print(f"- Response: {document_resp}")
-        if self.config.variable_tag in document_resp:
-            self.log["category"] = document_resp[self.config.variable_tag]
-            return document_resp[self.config.variable_tag]
-        self.log["category"] = self.config.null_value
-        return self.config.null_value
+        if metadata_resp != self.config.null_value:
+            return metadata_resp
+        return self._extract_from_documents()

@@ -54,7 +54,7 @@ class ExtractorConfig:
         "",)
     chunk_size: int = 700
     overlap: int = 0
-    language_model: str = "llama3.1"
-    llm_document_count: int = 9
+    language_model: str = "mistral"
+    llm_document_count: int = 7
     document_separator: str = "||"
     llm_context_length: int = 2048

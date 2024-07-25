@@ -7,6 +7,7 @@ import pandas as pd
 from utils.case_metadata import CaseMetadata
 from extractors.bench_ruling_classifier import BenchRulingClassifier
 from extractors.jury_ruling_classifier import JuryRulingClassifier
+from extractors.extractor_log import ExtractorLog
 
 class CaseDirectory:
     """
@@ -49,7 +50,14 @@ class CaseDirectory:
 
     def get_metadata_json(
         self,
-        fields: set[str] = (
+        fields: set[str]|None = None,
+    ) -> list[dict]:
+        """
+        returns list of metadata.json contents for each case included in directory
+        includes above fields and metadata_path
+        """
+        if fields is None:
+            fields = (
             "court",
             "title",
             "docket",
@@ -62,22 +70,22 @@ class CaseDirectory:
             "nature_of_suit",
             "cause",
             "magistrate",
-        ),
-    ) -> list[dict]:
-        """
-        returns list of metadata.json contents for each case included in directory
-        includes above fields and metadata_path
-        """
+        )
         return [
             CaseMetadata.from_metadata_path(path).get_metadata_json(fields)
             for path in self.metadata_paths
         ]
 
+    def get_metadata_df(self, fields: set[str]|None = None) -> pd.DataFrame:
+        """
+        generates dataframe of provided metadata fields for all cases in directory
+        """
+        return pd.DataFrame(self.get_metadata_json(fields))
+
     def convert_to_text(self) -> None:
         """
         Converts all documents missing a file extension in directory to text files
         """
-
         def convert_directory(parent: str) -> None:
             for f in os.listdir(parent):
                 path = os.path.join(parent, f)
@@ -87,7 +95,6 @@ class CaseDirectory:
                         os.rename(path, path + ".txt")
                 if os.path.isdir(path):
                     convert_directory(path)
-
         convert_directory(self.parent_directory)
 
     def get_proportion_downloaded(self) -> float:
@@ -169,3 +176,18 @@ class CaseDirectory:
                 log.to_csv(log_title, index=False)
                 metadata.to_csv(metadata_title, index=False)
                 i += 1
+
+    @staticmethod
+    def categorize_from_metadata_path(path: str) -> tuple[str, ExtractorLog|None]:
+        """
+        Categorizes case outcome as plaintiff, defendant, or unknown
+        returns log along with result
+        """
+        metadata = CaseMetadata.from_metadata_path(path)
+        if metadata.categorize_trial_type() == "jury":
+            c = JuryRulingClassifier(metadata)
+            return (c.extract(), c.log)
+        if metadata.categorize_trial_type() == "bench":
+            c = BenchRulingClassifier(metadata)
+            return (c.extract(), c.log)
+        return ("unknown", None)
