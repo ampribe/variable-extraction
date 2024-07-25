@@ -15,32 +15,7 @@ class BenchRulingClassifier(VariableExtractor):
 
     Public methods:
         extract: extracts ruling (plaintiff/defendant) from case
-        summarize: summarizes provided document
     """
-    def __init__(
-        self,
-        metadata_path: str,
-        config: ExtractorConfig|None = None
-    ) -> None:
-        """
-        Classifies bench trial ruling.
-        Prompt identifies plaintiffs/defendants by both title and name
-        (should classify cases that refer to plaintiff/defendant by name)
-        Response includes reasoning + category (plaintiff, defendant, undetermined)
-        Keyword filter requires documents contain party keyword
-        (plaintiff, defendant, names of plaintiff/defendant)
-        and outcome keyword (verdict, ruling, judgement, etc.)
-
-        """
-        metadata = CaseMetadata.from_metadata_path(metadata_path)
-        if config is None:
-            config = self._get_default_config(metadata)
-
-        super().__init__(
-            metadata,
-            config
-        )
-
     @staticmethod
     def _get_default_config(metadata: CaseMetadata) -> ExtractorConfig:
         parties_dict = metadata.get_parties_dict()

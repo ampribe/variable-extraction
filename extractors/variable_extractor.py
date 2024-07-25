@@ -4,38 +4,48 @@ VariableExtractor is a base class for variable extraction from an individual cou
 """
 import json
 from dataclasses import asdict
+from abc import ABC, abstractmethod
 import ollama
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import chromadb
 from utils.case_metadata import CaseMetadata
 from extractors.extractor_config import ExtractorConfig
 
-class VariableExtractor:
+class VariableExtractor(ABC):
     """
     Provides base class for extracting variables from case (specified by metadata path)
+    Each subclass must implement _get_default_config
     Public Methods:
         extract: extracts variable from case
-        summarize: summarizes provided document
 
     """
-    def __init__(self, metadata: CaseMetadata, config: ExtractorConfig) -> None:
+    def __init__(self, metadata: CaseMetadata, config: ExtractorConfig|None = None) -> None:
         """
         parameters:
             metadata: CaseMetadata of case to extract
             config: ExtractorConfig for this extractor
         """
         self.metadata = metadata
-        self.config = config
+        if config is None:
+            self.config = self._get_default_config(metadata)
+        else:
+            self.config = config
         self.log = self.metadata.get_metadata_json(
             fields=("court","title","docket","judges","link")
                 ) | asdict(self.config)
 
+    @staticmethod
+    @abstractmethod
+    def _get_default_config(metadata: CaseMetadata) -> ExtractorConfig:
+        pass
+
     @classmethod
-    def from_metadata_path(cls, path: str, config: ExtractorConfig) -> "VariableExtractor":
+    def from_metadata_path(cls, path: str, config: ExtractorConfig|None=None)->"VariableExtractor":
         """
-        constructs VariableExtractor from path to case metadata and config
+        Initializes VariableExtractor from path to metadata
         """
-        return cls(CaseMetadata.from_metadata_path(path), config)
+        metadata = CaseMetadata.from_metadata_path(path)
+        return cls(metadata, config)
 
     def _chunk_text_list(self, text_list: list[str]) -> list[str]:
         """

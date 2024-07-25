@@ -8,9 +8,6 @@ import warnings
 from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
 import numpy as np
 import pandas as pd
-from extractors.jury_ruling_classifier import JuryRulingClassifier
-from extractors.bench_ruling_classifier import BenchRulingClassifier
-
 
 warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 
@@ -257,15 +254,3 @@ class CaseMetadata:
         and each downloaded file is a separate document
         """
         return self.get_downloaded_document_count() / self.get_total_document_count()
-    
-    def categorize_outcome(self) -> str:
-        """
-        Categorizes winner of case -- "plaintiff", "defendant", "unknown"
-        """
-        if self.categorize_trial_type() == "jury":
-            classifier = JuryRulingClassifier(self.path)
-            return classifier.extract()
-        if self.categorize_trial_type() == "bench":
-            classifier = BenchRulingClassifier(self.path)
-            return classifier.extract()
-        return "unknown"

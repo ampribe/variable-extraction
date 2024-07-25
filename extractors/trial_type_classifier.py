@@ -7,8 +7,10 @@ from utils.case_metadata import CaseMetadata
 
 class TrialTypeClassifier(VariableExtractor):
     """
-    Provides variable extractor with a system prompt and keyword filter
-    for classifying trial type (bench/jury)
+    Classifies trial type (bench trial or jury trial).
+    Response includes reasoning + category (bench trial, jury trial, undetermined)
+    Keyword filter requires documents contain outcome keyword
+    (verdict, ruling, judgement, etc.)
 
     Parameters:
         metadata_path: path to metadata file for case to classify
@@ -17,17 +19,8 @@ class TrialTypeClassifier(VariableExtractor):
         extract: extracts trial type (bench/jury) from case
         summarize: summarizes provided document
     """
-    def __init__(
-        self,
-        metadata_path: str,
-    ) -> None:
-        """
-        Classifies trial type (bench trial or jury trial).
-        Response includes reasoning + category (bench trial, jury trial, undetermined)
-        Keyword filter requires documents contain outcome keyword
-        (verdict, ruling, judgement, etc.)
-
-        """
+    @staticmethod
+    def _get_default_config(metadata: CaseMetadata) -> ExtractorConfig:
         language_model_prompt = """
         You are an expert legal analyst. The given documents relate to a legal case in the United States. All descriptions correspond to the same case. Your task is to classify the outcome of this case into one of the following categories:
 
@@ -65,14 +58,10 @@ class TrialTypeClassifier(VariableExtractor):
             ]
             return any((word in s.lower() for word in result_keywords))
 
-        config = ExtractorConfig(
+        return ExtractorConfig(
             language_model_prompt=language_model_prompt,
             embedding_model_prompt=embedding_model_prompt,
             variable_tag="category",
             null_value="undetermined",
             content_filter=keyword_filter,
             title_filter=keyword_filter)
-        super().__init__(
-            CaseMetadata.from_metadata_path(metadata_path),
-            config
-        )

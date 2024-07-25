@@ -16,13 +16,8 @@ class DocumentSummarizer(VariableExtractor):
     Public methods:
         extract: extracts summary from case
     """
-    def __init__(
-        self,
-        metadata_path: str,
-    ) -> None:
-        """
-        summarizes case documents
-        """
+    @staticmethod
+    def _get_default_config(metadata: CaseMetadata) -> ExtractorConfig:
         language_model_prompt = """
         You are an expert legal analyst. The user message will contain a sequence of documents related to a legal case in the United States.
         Your task is to summarize the events of the case. Describe each document in 10 words or less. You must describe the outcome of the case.
@@ -50,14 +45,11 @@ class DocumentSummarizer(VariableExtractor):
             ]
             return any((word in s.lower() for word in result_keywords))
 
-        config = ExtractorConfig(
+        return ExtractorConfig(
             language_model_prompt=language_model_prompt,
             embedding_model_prompt=embedding_model_prompt,
             variable_tag="summary",
             null_value="unknown",
             content_filter=keyword_filter,
             title_filter=keyword_filter)
-        super().__init__(
-            CaseMetadata.from_metadata_path(metadata_path),
-            config
-        )
+
