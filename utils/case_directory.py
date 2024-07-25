@@ -133,8 +133,8 @@ class CaseDirectory:
         df["trial_type"] = ([m.categorize_trial_type() if df.iloc[i].trial
                              else "unknown" for i, m in enumerate(metadata)])
         df.to_csv(title, index=False)
-    
-    def categorize_outcomes(self, metadata_title: str, log_title: str, language_model: str = "llama3.1") -> None:
+
+    def categorize_outcomes(self, metadata_title: str, log_title: str) -> None:
         """
         Categorizes outcomes of cases with trials
         Parameters:
@@ -143,9 +143,9 @@ class CaseDirectory:
         """
         def categorize_row(row):
             if row["trial_type"] == "bench":
-                classifier = BenchRulingClassifier(row["metadata_path"], language_model=language_model)
+                classifier = BenchRulingClassifier(row["metadata_path"])
                 return (classifier.extract(), classifier.log)
-            classifier = JuryRulingClassifier(row["metadata_path"], language_model=language_model)
+            classifier = JuryRulingClassifier(row["metadata_path"])
             return (classifier.extract(), classifier.log)
         metadata = pd.read_csv(metadata_title)
         if os.path.isfile(log_title):

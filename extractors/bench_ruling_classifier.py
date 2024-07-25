@@ -2,6 +2,7 @@
 Module includes BenchRulingClassifier for classifying rulings of bench trials
 """
 from extractors.variable_extractor import VariableExtractor
+from extractors.extractor_config import ExtractorConfig
 from utils.case_metadata import CaseMetadata
 
 class BenchRulingClassifier(VariableExtractor):
@@ -19,14 +20,7 @@ class BenchRulingClassifier(VariableExtractor):
     def __init__(
         self,
         metadata_path: str,
-        embedding_model: str = "mxbai-embed-large",
-        separators: list[str]|None = None,
-        chunk_size: int = 700,
-        overlap: int = 0,
-        language_model: str = "mistral",
-        llm_document_count: int = 9,
-        document_separator: str = "||",
-        llm_context_length: int = 2048,
+        config: ExtractorConfig|None = None
     ) -> None:
         """
         Classifies bench trial ruling.
@@ -38,9 +32,20 @@ class BenchRulingClassifier(VariableExtractor):
         and outcome keyword (verdict, ruling, judgement, etc.)
 
         """
-        parties_dict = CaseMetadata.from_metadata_path(metadata_path).get_parties_dict()
+        metadata = CaseMetadata.from_metadata_path(metadata_path)
+        if config is None:
+            config = self._get_default_config(metadata)
 
-        prompt = f"""
+        super().__init__(
+            metadata,
+            config
+        )
+
+    @staticmethod
+    def _get_default_config(metadata: CaseMetadata) -> ExtractorConfig:
+        parties_dict = metadata.get_parties_dict()
+
+        language_model_prompt = f"""
         You are an expert legal analyst. You will be given a list of excerpts from legal documents relating to a case in the United States with a decision made by a judge. Documents are separated by ||. All documents correspond to the same case. Classify the outcome of this case into one of the following categories:
 
         plaintiff
@@ -61,6 +66,7 @@ class BenchRulingClassifier(VariableExtractor):
         Do not summarize the case or documents in reasoning. 
         category should only include one of the following categories: plaintiff, defendant, undetermined.
         """
+        embedding_model_prompt = "Ruling for plaintiff or defendant in judgement, opinion, decision, or verdict."
 
         party_keywords = [val for ls in parties_dict.values() for val in ls] + [
                 "plaintiff",
@@ -86,19 +92,10 @@ class BenchRulingClassifier(VariableExtractor):
         def title_filter(s: str):
             return has_result_keywords(s)
 
-        super().__init__(
-            metadata_path,
-            prompt,
-            "category",
-            "undetermined",
-            content_filter,
-            title_filter,
-            embedding_model,
-            separators,
-            chunk_size,
-            overlap,
-            language_model,
-            llm_document_count,
-            document_separator,
-            llm_context_length,
-        )
+        return ExtractorConfig(
+            language_model_prompt=language_model_prompt,
+            embedding_model_prompt=embedding_model_prompt,
+            variable_tag="category",
+            null_value="undetermined",
+            content_filter=content_filter,
+            title_filter=title_filter)

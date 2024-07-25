@@ -2,6 +2,8 @@
 Module provides TrialTypeClassifier class for classifying trial type (bench/jury)
 """
 from extractors.variable_extractor import VariableExtractor
+from extractors.extractor_config import ExtractorConfig
+from utils.case_metadata import CaseMetadata
 
 class TrialTypeClassifier(VariableExtractor):
     """
@@ -18,14 +20,6 @@ class TrialTypeClassifier(VariableExtractor):
     def __init__(
         self,
         metadata_path: str,
-        embedding_model: str = "mxbai-embed-large",
-        separators: list[str]|None = None,
-        chunk_size: int = 700,
-        overlap: int = 0,
-        language_model: str = "mistral",
-        llm_document_count: int = 9,
-        document_separator: str = "||",
-        llm_context_length: int = 2048,
     ) -> None:
         """
         Classifies trial type (bench trial or jury trial).
@@ -34,7 +28,7 @@ class TrialTypeClassifier(VariableExtractor):
         (verdict, ruling, judgement, etc.)
 
         """
-        prompt = """
+        language_model_prompt = """
         You are an expert legal analyst. The given documents relate to a legal case in the United States. All descriptions correspond to the same case. Your task is to classify the outcome of this case into one of the following categories:
 
         jury trial
@@ -54,6 +48,7 @@ class TrialTypeClassifier(VariableExtractor):
         Otherwise, the reasoning should be a string in the form, "The case includes _, which could be found in cases with multiple outcomes. Therefore, the case outcome is undetermined". Do not summarize the case or documents. 
         category should only include one of the following categories as a string: jury trial, bench trial, undetermined.
         """
+        embedding_model_prompt = "Case outcome including trial, plea, settlement, judgement, dismissal or dismissed, or verdict"
 
         def keyword_filter(s):
             result_keywords = [
@@ -70,19 +65,14 @@ class TrialTypeClassifier(VariableExtractor):
             ]
             return any((word in s.lower() for word in result_keywords))
 
+        config = ExtractorConfig(
+            language_model_prompt=language_model_prompt,
+            embedding_model_prompt=embedding_model_prompt,
+            variable_tag="category",
+            null_value="undetermined",
+            content_filter=keyword_filter,
+            title_filter=keyword_filter)
         super().__init__(
-            metadata_path,
-            prompt,
-            "category",
-            "undetermined",
-            keyword_filter,
-            keyword_filter,
-            embedding_model,
-            separators,
-            chunk_size,
-            overlap,
-            language_model,
-            llm_document_count,
-            document_separator,
-            llm_context_length,
+            CaseMetadata.from_metadata_path(metadata_path),
+            config
         )
