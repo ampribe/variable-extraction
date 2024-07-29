@@ -1,5 +1,7 @@
 ## Description
 This project extracts variables from court documents using retrieval-augmented generation. The project is organized into the following structure:
+
+```bash
 ├── extractors
 │   ├── __init__.py
 │   ├── bench_ruling_classifier.py
@@ -20,6 +22,7 @@ This project extracts variables from court documents using retrieval-augmented g
 │   └── document.py
 ├── README.md
 └── requirements.txt
+```
 
 case_directory defines CaseDirectory, which provides general methods for handling a directory of cases. Individual case information is stored in a CaseMetadata object. The variable_extractor module defines VariableExtractor, a base class that requires ExtractorConfig and CaseMetadata objects to extract a variable from a court case. 
 
