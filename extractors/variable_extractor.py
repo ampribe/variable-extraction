@@ -9,6 +9,7 @@ import ollama
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import chromadb
 from utils.case_metadata import CaseMetadata
+from utils.document import Document
 from extractors.extractor_config import ExtractorConfig
 from extractors.extractor_log import ExtractorLog
 
@@ -16,6 +17,7 @@ class VariableExtractor(ABC):
     """
     Provides base class for extracting variables from case (specified by metadata path)
     Each subclass must implement _get_default_config
+    _get_default_con fig:Generates ExtractorCon from CaseMetadata object
     Public Methods:
         extract: extracts variable from case
     """
@@ -47,11 +49,11 @@ class VariableExtractor(ABC):
         metadata = CaseMetadata.from_metadata_path(path)
         return cls(metadata, config)
 
-    def _chunk_text_list(self, text_list: list[str]) -> list[str]:
+    def _chunk_documents(self, docs: list[Document]) -> list[str]:
         """
-        chunks list of texts
-        uses separators, chunk size, chunk overlap from config
+        Given list of documents, chunks documents based on self.config.separators
         """
+        text_list = [doc.content_clean for doc in docs]
         text_splitter = RecursiveCharacterTextSplitter(
             separators=self.config.separators,
             chunk_size=self.config.chunk_size,
@@ -63,21 +65,13 @@ class VariableExtractor(ABC):
             for chunk in text_splitter.split_text(text)
             ]
 
-    def _filter_by_keyword_function(self, text_list: list[str]) -> list[str]:
-        """
-        filters text strings by provided content_filter function in config
-        """
-        return [
-            text
-            for text in text_list
-            if self.config.content_filter(text)
-            ]
-        
     def _filter_by_semantic_similarity(self, text_list: list[str]) -> list[str]:
         """
         Constructs vector database from provided texts,
         filters documents by semantic similarity to embedding_model_prompt
         """
+        if len(text_list) == 0:
+            return []
         client = chromadb.Client()
         for collection in client.list_collections():
             if collection.name == "case":
@@ -99,98 +93,83 @@ class VariableExtractor(ABC):
             n_results=self.config.llm_document_count
             )["documents"][0]
 
-    def _get_relevant_chunks(self, docs: list[str]) -> tuple[list[str], dict[str, list[str]]]:
+    def _get_context_string(self, docs: list[Document]):
         """
-        Applies _chunk_text_list, _filter_by_keyword_function,
-        _filter_by_semantic_similarity in order to text list
-        returns relevant chunks and log of filtering process
+        Returns context string after filtering by title, chunking, filtering by keyword, and filtering by semantic similarity
         """
-        log = {}
-        log["docs_before_chunking"] = docs
-        log["chunks"] = self._chunk_text_list(log["docs_before_chunking"])
-        log["chunks_after_keyword_filter"] = self._filter_by_keyword_function(log["chunks"])
-        log["chunks_after_semantic_filter"] = self._filter_by_semantic_similarity(log["chunks_after_keyword_filter"])
-        return (log["chunks_after_semantic_filter"], log)
+        docs_after_title_filter = [doc for doc in docs if self.config.title_filter(doc.title)]
+        chunks = self._chunk_documents(docs_after_title_filter)
+        chunks_after_keyword_filter = [chunk for chunk in chunks if self.config.content_filter(chunk)]
+        chunks_after_semantic_filter = self._filter_by_semantic_similarity(chunks_after_keyword_filter)
+        log = {"docs": docs, "docs_after_title_filter": docs_after_title_filter,
+                "chunks": chunks, "chunks_after_keyword_filter": chunks_after_keyword_filter,
+                "chunks_after_semantic_filter": chunks_after_semantic_filter}
+        return (self.config.document_separator.join(chunks_after_semantic_filter), log)
 
-    def _query_llm(self, context_documents: list[str]) -> tuple[dict[str, str], str]:
+    def _query_llm(self, context_string: str) -> tuple[str, str]:
         """
         queries llm based on query and documents given as context
-        query (from parameters) given as system prompt, documents given as prompt
-        returns tuple of response (after converting to json) and context provided from documents
+        Parameters:
+            context_string
+        returns:
+            tuple[variable value, full response]
         """
-        context = self.config.document_separator.join(context_documents)
         response = ollama.generate(
             model=self.config.language_model,
-            prompt=context,
+            prompt=context_string,
             system=self.config.language_model_prompt,
             options={"num_ctx": self.config.llm_context_length},
             format="json",
         )["response"] # pylint: disable=unsubscriptable-object
-        return (response, context)
-
-    def _load_response(self, response) -> str:
-        """
-        Attempts to load json response from model
-        Returns null tag if failure
-        """
         try:
-            return json.loads(response)[self.config.variable_tag] 
-        except:
-            return self.config.null_value
+            return (json.loads(response)[self.config.variable_tag], response)
+        except: # pylint: disable=bare-except
+            return (self.config.null_value, response)
 
     def _extract_from_metadata(self) -> str:
         """
         queries llm with docket_report content and logs query
-        returns response as json
+        returns variable value
         """
         print("Extracting from metadata...")
         print("- Getting relevant chunks...")
-        chunks, log = self._get_relevant_chunks(self.metadata.get_docket_report_contents())
-        log["llm_context"] = None
-        log["llm_response_raw"] = None
-        log["llm_response"] = self.config.null_value
+        context, log = self._get_context_string(self.metadata.get_docket_report_as_documents())
         self.log.update_metadata_classification(log)
-        if len(chunks) == 0:
+        if len(context) == 0:
             return self.config.null_value
         print("- Querying llm...")
-        log["llm_response_raw"], log["llm_context"] = self._query_llm(chunks)
-        log["llm_response"] = self._load_response(log["llm_response_raw"])
+        var, resp = self._query_llm(context)
+        log["variable"] = var
+        log["response"] = resp
         self.log.update_metadata_classification(log)
-        return log["llm_response"]
-
+        return var
 
     def _extract_from_documents(self) -> str:
         """
         queries llm with relevant chunks from documents,
         only uses documents associated with relevant docket_report entry
 
-        returns:
-            response as json
+        returns variable value
         """
         print("Extracting from documents...")
         print("- Getting relevant chunks...")
-        doc_dict = self.metadata.get_documents_by_docket_report_filter(self.config.title_filter)
-        chunks, log = self._get_relevant_chunks(list(doc_dict.values()))
-        log["docs_after_title_filter"] = list(doc_dict.values())
-        log["llm_context"] = None
-        log["llm_response_raw"] = None
-        log["llm_response"] = self.config.null_value
+        context, log = self._get_context_string(self.metadata.get_documents())
         self.log.update_document_classification(log)
-        if len(chunks) == 0:
+        if len(context) == 0:
             return self.config.null_value
-        print("- Querying llm...")
-        log["llm_response_raw"], log["llm_context"] = self._query_llm(chunks)
-        log["llm_response"] = self._load_response(log["llm_response_raw"])
+        var, resp = self._query_llm(context)
+        log["variable"] = var
+        log["response"] = resp
         self.log.update_document_classification(log)
-        return log["llm_response"]
+        return var
 
     def extract(self) -> str:
         """
         first checks metadata for variable, then checks documents
 
-        return string response
+        return variable value, stores log in self.log
         """
         metadata_resp = self._extract_from_metadata()
-        if metadata_resp != self.config.null_value:
-            return metadata_resp
-        return self._extract_from_documents()
+        resp = metadata_resp if metadata_resp != self.config.null_value else self._extract_from_documents()
+        print(resp)
+        return resp

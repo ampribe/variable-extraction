@@ -18,8 +18,8 @@ class JuryRulingClassifier(VariableExtractor):
     def _get_default_config(metadata: CaseMetadata) -> ExtractorConfig:
         parties_dict = metadata.get_parties_dict()
 
-        language_model_prompt = f"""
-        You are an expert legal analyst. You will be given a list of excerpts from legal documents relating to a case in the United States with a decision made by a jury. Documents are separated by ||. All documents correspond to the same case. Classify the outcome of this case into one of the following categories:
+        language_model_prompt = f"""You are an expert legal analyst. You will be given a list of excerpts from legal documents relating to a case in the United States with a decision made by a jury.
+        Documents are separated by ||. All documents correspond to the same case. Classify the outcome of this case into one of the following categories:
 
         plaintiff
         defendant
@@ -32,6 +32,7 @@ class JuryRulingClassifier(VariableExtractor):
         The documents may refer to the defendant as "defendant" or by name.
         Here is a list of defendant names: {", ".join(parties_dict["defendant"][:min(5, len(parties_dict["defendant"]))])}
         If the documents provided do not identify the jury verdict or the documents are ambiguous, classify the outcome as undetermined.
+        A proposed verdict form does not identify the verdict, do not use proposed forms in your classification. 
 
         Respond with a JSON object in the format "{{"reasoning": "...", "category": "..."}}"
         If the jury verdict is identified, reasoning should be in the format "According to the documents, _ occurred. This shows that the jury ruled in favor of _ because _."

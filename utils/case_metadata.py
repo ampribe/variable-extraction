@@ -3,11 +3,11 @@ Module includes CaseMetadata class that provides methods for handling case docum
 """
 import os
 import json
-from typing import Callable
 import warnings
 from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
 import numpy as np
 import pandas as pd
+from utils.document import Document
 
 warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 
@@ -175,66 +175,23 @@ class CaseMetadata:
         (ignores associate metadata like date, index, etc)
         """
         return self.get_docket_report().contents.tolist()
-
-    def get_documents(self) -> dict[str, str]:
+    
+    def get_docket_report_as_documents(self) -> list[Document]:
         """
-        returns dictionary of documents found in
-        subdirectory of metadata parent folder
-        (checks all subdirectories within parent folder)
-        {path: document}
+        returns docket report as list of Document instances
         """
+        return [Document(title) for title in self.get_docket_report_contents()]
 
-        def search_subdirectory(path: str) -> list[str]:
-            docs = {}
-            for entry in os.scandir(path):
-                if os.path.isdir(entry):
-                    docs.update(search_subdirectory(entry.path))
-                else:
-                    with open(entry.path, errors="ignore", encoding="utf-8") as f:
-                        docs[entry.path] = f.read()
-            return docs
-
-        parent_directory = os.path.dirname(self.path)
-        documents = {}
-        for f in os.scandir(parent_directory):
-            if os.path.isdir(f):
-                documents.update(search_subdirectory(f.path))
-        return documents
-
-    def get_documents_by_docket_report_filter(self, f: Callable[[str], bool]) -> dict[str, str]:
-        """
-        Returns documents based on docket_report entry matching a keyword function
-        parameters:
-            f: function that returns boolean from docket_report contents string
-        returns: list of strings, each string corresponding to a different document
-        """
-        docs = {}
+    def get_documents(self) -> list[Document]:
         docket_report = self.get_docket_report()
         if "contents" in docket_report.columns and "document_path" in docket_report.columns:
-            mask = (docket_report.contents.apply(f)) & (docket_report.document_path != "")
-            paths = docket_report[mask].document_path.tolist()
-            for path in paths:
-                with open(path, errors="ignore", encoding="utf-8") as f:
-                    docs[path] = f.read()
-        return docs
+            docs_with_path = docket_report[docket_report.document_path != ""]
+            if len(docs_with_path) > 0:
+                return (docs_with_path
+                        .apply(lambda row: Document(row["contents"], row["document_path"]), axis=1)
+                        .tolist())
+        return []
 
-    def get_document_by_docket_report_title(self, title: str) -> dict[str, str]:
-        """
-        Parameters
-            title: contents of docket_report entry
-        Returns
-            dict in form {path: document} for all matching documents
-            {} if no such document
-        """
-        res = {}
-        docket_report = self.get_docket_report()
-        paths = docket_report.loc[docket_report.contents == title, "document_path"].tolist()
-        for path in paths:
-            if path != "":
-                with open(path, errors="ignore", encoding="utf-8") as f:
-                    res[path] = f.read()
-        return res
-                
     def get_total_document_count(self) -> int:
         """
         returns total documents in docket_report
