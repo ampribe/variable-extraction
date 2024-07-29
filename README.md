@@ -57,4 +57,4 @@ ollama pull mxbai-embed-large
 
 ## Usage
 ### Testing
-To test on federal cases, create a data directory in the project directory and add 100_random_fed to the data directory. Then, run `python3 -m tests.test_fed` from the project directory. This will create "results.csv" and "logs.pkl" files in the tests directory which can be loaded using the instructions in test_fed.py.
+To test on federal cases, create a directory `data` in the project directory and add 100_random_fed to `data`. Then, run `python3 -m tests.test_fed` from the project directory. This will create "results.csv" and "logs.pkl" files in the tests directory which can be loaded using the instructions in  `test_fed.py`.
