@@ -27,6 +27,13 @@ This project extracts variables from court documents using retrieval-augmented g
 case_directory defines CaseDirectory, which provides general methods for handling a directory of cases. Individual case information is stored in a CaseMetadata object. The variable_extractor module defines VariableExtractor, a base class that requires ExtractorConfig and CaseMetadata objects to extract a variable from a court case. 
 
 ## Installation
+### Prerequisites
+- Python 3
+- pip3
+- venv `python3 -m pip install --user virtualenv`
+- [Ollama](https://github.com/ollama/ollama)
+
+### Instructions
 1. Clone the repository
 ```
 git clone https://github.com/ampribe/variable-extraction.git
