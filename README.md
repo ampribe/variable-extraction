@@ -42,7 +42,7 @@ git clone https://github.com/ampribe/variable-extraction.git
 ```
 cd variable-extraction
 python3 -m venv venv
-venv\bin\activate (MacOS/Linux)
+source venv\bin\activate (MacOS/Linux)
 venv\Scripts\activate (Windows)
 ```
 3. Install requirements
