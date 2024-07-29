@@ -28,15 +28,25 @@ case_directory defines CaseDirectory, which provides general methods for handlin
 
 ## Installation
 1. Clone the repository
-`git clone https://github.com/ampribe/variable-extraction.git`
+```
+git clone https://github.com/ampribe/variable-extraction.git
+```
 2. Create and activate a virtual environment within the project directory
-`cd variable-extraction`
-`python3 -m venv venv`
-`.\venv\Scripts\activate`
+```
+cd variable-extraction
+```
+python3 -m venv venv
+```
+.\venv\Scripts\activate
+```
 3. Install requirements
-`pip install -r requirements.txt`
+```
+pip install -r requirements.txt
+```
 4. Install necessary language models (llama3, mxbai-embed-large)
-`ollama pull llama3`
-`ollama pull mxbai-embed-large`
+```
+ollama pull llama3
+ollama pull mxbai-embed-large
+```
 
 ## Usage
