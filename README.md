@@ -41,14 +41,13 @@ git clone https://github.com/ampribe/variable-extraction.git
 2. Create and activate a virtual environment within the project directory
 ```
 cd variable-extraction
-```
 python3 -m venv venv
-```
-.\venv\Scripts\activate
+venv\bin\activate (MacOS/Linux)
+venv\Scripts\activate (Windows)
 ```
 3. Install requirements
 ```
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 ```
 4. Install necessary language models (llama3, mxbai-embed-large)
 ```
