@@ -52,6 +52,7 @@ class BenchRulingClassifier(VariableExtractor):
         result_keywords = [
             "verdict",
             "judgement",
+            "judgment",
             "opinion",
             "decision",
             "decree",

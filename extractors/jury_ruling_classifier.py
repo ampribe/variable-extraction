@@ -32,7 +32,8 @@ class JuryRulingClassifier(VariableExtractor):
         The documents may refer to the defendant as "defendant" or by name.
         Here is a list of defendant names: {", ".join(parties_dict["defendant"][:min(5, len(parties_dict["defendant"]))])}
         If the documents provided do not identify the jury verdict or the documents are ambiguous, classify the outcome as undetermined.
-        A proposed verdict form does not identify the verdict, do not use proposed forms in your classification. 
+        A party
+        A party proposing a verdict or verdict sheet does not indicate that the jury will rule in favor of that party. Do not use proposed forms in your classification. 
 
         Respond with a JSON object in the format "{{"reasoning": "...", "category": "..."}}"
         If the jury verdict is identified, reasoning should be in the format "According to the documents, _ occurred. This shows that the jury ruled in favor of _ because _."
@@ -51,6 +52,7 @@ class JuryRulingClassifier(VariableExtractor):
         result_keywords = [
             "verdict",
             "judgement",
+            "judgment",
             "opinion",
             "decision",
             "decree",
@@ -63,7 +65,7 @@ class JuryRulingClassifier(VariableExtractor):
         def has_result_keywords(s: str) -> bool:
             return any((word.lower() in s.lower() for word in result_keywords))
         def content_filter(s: str):
-            return has_result_keywords(s) and has_party(s)
+            return has_result_keywords(s) and has_party(s) and "proposed" not in s.lower()
         def title_filter(s: str):
             return has_result_keywords(s)
 

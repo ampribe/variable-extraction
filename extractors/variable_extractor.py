@@ -101,10 +101,11 @@ class VariableExtractor(ABC):
         chunks = self._chunk_documents(docs_after_title_filter)
         chunks_after_keyword_filter = [chunk for chunk in chunks if self.config.content_filter(chunk)]
         chunks_after_semantic_filter = self._filter_by_semantic_similarity(chunks_after_keyword_filter)
+        context = self.config.document_separator.join(chunks_after_semantic_filter)
         log = {"docs": docs, "docs_after_title_filter": docs_after_title_filter,
                 "chunks": chunks, "chunks_after_keyword_filter": chunks_after_keyword_filter,
-                "chunks_after_semantic_filter": chunks_after_semantic_filter}
-        return (self.config.document_separator.join(chunks_after_semantic_filter), log)
+                "chunks_after_semantic_filter": chunks_after_semantic_filter, "context": context}
+        return (context, log)
 
     def _query_llm(self, context_string: str) -> tuple[str, str]:
         """
@@ -157,6 +158,8 @@ class VariableExtractor(ABC):
         self.log.update_document_classification(log)
         if len(context) == 0:
             return self.config.null_value
+        print("- Querying llm...")
+        print(repr(context))
         var, resp = self._query_llm(context)
         log["variable"] = var
         log["response"] = resp
@@ -173,3 +176,13 @@ class VariableExtractor(ABC):
         resp = metadata_resp if metadata_resp != self.config.null_value else self._extract_from_documents()
         print(resp)
         return resp
+    
+    def test_context(self) -> None:
+        """
+        Generates context strings for both metadata and document searches
+        (these can be accessed using log)
+        """
+        _, metadata_log = self._get_context_string(self.metadata.get_docket_report_as_documents())
+        self.log.update_metadata_classification(metadata_log)
+        _, document_log = self._get_context_string(self.metadata.get_documents())
+        self.log.update_document_classification(document_log)

@@ -4,6 +4,7 @@ Module includes CaseDirectory path that provides utility functions for handling 
 import os
 import numpy as np
 import pandas as pd
+import dill
 from utils.case_metadata import CaseMetadata
 from extractors.bench_ruling_classifier import BenchRulingClassifier
 from extractors.jury_ruling_classifier import JuryRulingClassifier
@@ -141,41 +142,31 @@ class CaseDirectory:
                              else "unknown" for i, m in enumerate(metadata)])
         df.to_csv(title, index=False)
 
-    def categorize_outcomes(self, metadata_title: str, log_title: str) -> None:
+    def categorize_outcomes(self, metadata_title: str, log_title: str, result_title: str) -> None:
         """
         Categorizes outcomes of cases with trials
         Parameters:
-            metadata_title: filename of metadata file generated using write_metadata
-            log_title: title of log file (can be partial if some cases already categorized)
+            metadata_title: filename of metadata file already generated using write_metadata
+            log_title: title of log file
+            result_title: title of results file
         """
-        def categorize_row(row):
-            if row["trial_type"] == "bench":
-                classifier = BenchRulingClassifier(row["metadata_path"])
-                return (classifier.extract(), classifier.log)
-            classifier = JuryRulingClassifier(row["metadata_path"])
-            return (classifier.extract(), classifier.log)
+        d = os.path.dirname(os.path.abspath(__file__))
         metadata = pd.read_csv(metadata_title)
-        if os.path.isfile(log_title):
-            log = pd.read_csv(log_title)
-        else:
-            log = pd.DataFrame(columns=["system_prompt", "metadata_path", "title",
-                                        "metadata_response", "metadata_response_json",
-                                        "metadata_context", "document_response",
-                                        "document_response_json", "document_context"])
-        if "trial_result" not in metadata.columns:
-            metadata["trial_result"] = np.nan
-        num_cases = len(metadata[(metadata.trial_type != "unknown") & (metadata.trial_result.isna())])
-        print(f"Cases to categorize: {num_cases}")
-        i = 1
-        for index, row in metadata.iterrows():
-            if row["trial_type"] != "unknown" and pd.isna(row["trial_result"]):
-                print(f"Categorizing case {i}")
-                category, log_row = categorize_row(row)
-                metadata.loc[index, "trial_result"] = category
-                log.loc[len(log)] = log_row
-                log.to_csv(log_title, index=False)
-                metadata.to_csv(metadata_title, index=False)
-                i += 1
+        metadata["result"] = ""
+        logs = []
+        tot = len(metadata[metadata.trial_type != "unknown"])
+        for i, (j, row) in enumerate(metadata[metadata.trial_type != "unknown"].iterrows()):
+            print(f"\n\n\nClassifying case {i+1} of {tot}")
+            if row.trial_type == "bench":
+                classifier = BenchRulingClassifier.from_metadata_path(f"{d}/../{row.metadata_path}")
+            else:
+                classifier = JuryRulingClassifier.from_metadata_path(f"{d}/../{row.metadata_path}")
+            metadata.loc[j, "result"], log = classifier.extract()
+            logs.append(log)
+
+        metadata.to_csv(result_title, index=False)
+        with open(log_title, "wb") as f:
+            dill.dump(logs, f)
 
     @staticmethod
     def categorize_from_metadata_path(path: str) -> tuple[str, ExtractorLog|None]:

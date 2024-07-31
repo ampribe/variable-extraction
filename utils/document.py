@@ -21,10 +21,24 @@ class Document:
     def content_clean(self) -> str:
         content = self.content
         subs = [
-            {"pattern": "(\d[\s|\W])+",
+            {"pattern": r"(\d[\s|\W])+",
              "description": "Remove extraneous numbers"},
-             {"pattern": "Filed (\d+\/)*\d+",
-              "description": "Remove filing date"}
+             {"pattern": r"(\d\n)+",
+              "description": "remove columns of numbers"},
+             {"pattern": r"Filed (\d+\/)*\d+",
+              "description": "Remove filing date"},
+              {"pattern": r"Case( No.| Number| Num| Num.| num.| num| number| no.| no| No)? \w+(-\w+)+",
+               "description": "Remove case number, in form Case 0cv-0392BRO-FFM"},
+               {"pattern": r"Page\s*ID\s*#?:\s*\d+",
+                "description": "Remove page ID in form Page ID #:554"},
+                {"pattern": r"Page ?\d* ?of",
+                "description": "Remove page number in form Page of (sometimes actual number is removed by above patterns)"},
+                {"pattern": r"Document ?\d+",
+                "description": "Remove document number"},
+                {"pattern": r"(?<=\s{2})\s+",
+                "description": "Remove extra whitespace"},
+                {"pattern": r"___+",
+                 "description": "Remove empty signature lines"}
         ]
         for sub in subs:
             content = re.sub(sub["pattern"], "", content)
