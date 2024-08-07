@@ -20,26 +20,26 @@ class BenchRulingClassifier(VariableExtractor):
     def _get_default_config(metadata: CaseMetadata) -> ExtractorConfig:
         parties_dict = metadata.get_parties_dict()
 
-        language_model_prompt = f"""
-        You are an expert legal analyst. You will be given a list of excerpts from legal documents relating to a case in the United States with a decision made by a judge. Documents are separated by ||. All documents correspond to the same case. Classify the outcome of this case into one of the following categories:
+        language_model_prompt = f"""You are an expert legal analyst. You will be given a list of excerpts from legal documents relating to a case in the United States with a decision made by a judge.
+Documents are separated by "---NEW DOCUMENT---". All documents correspond to the same case. Classify the outcome of this case into one of the following categories:
 
-        plaintiff
-        defendant
-        undetermined
+plaintiff
+defendant
+undetermined
 
-        If the judge decided in favor of the plaintiff, classify the outcome as plaintiff.
-        The documents may refer to the plaintiff as "plaintiff" or by name.
-        Here is a list of plaintiff names: {", ".join(parties_dict["plaintiff"][:min(5, len(parties_dict["plaintiff"]))])}
-        If the judge decided in favor of the defendant, classify the outcome as defendant.
-        The documents may refer to the defendant as "defendant" or by name.
-        Here is a list of defendant names: {", ".join(parties_dict["defendant"][:min(5, len(parties_dict["defendant"]))])}
-        If the documents provided do not identify the judge's ruling or the documents are ambiguous, classify the outcome as undetermined.
+If the judge decided in favor of the plaintiff, classify the outcome as plaintiff.
+The documents may refer to the plaintiff as "plaintiff" or by name.
+Here is a list of plaintiff names: {", ".join(parties_dict["plaintiff"][:min(5, len(parties_dict["plaintiff"]))])}
+If the judge decided in favor of the defendant, classify the outcome as defendant.
+The documents may refer to the defendant as "defendant" or by name.
+Here is a list of defendant names: {", ".join(parties_dict["defendant"][:min(5, len(parties_dict["defendant"]))])}
+If the documents provided do not identify the judge's ruling or the documents are ambiguous, classify the outcome as undetermined.
 
-        Respond with a JSON object in the format "{{"reasoning": "...", "category": "..."}}"
-        If a ruling is identified, reasoning should be in the format "According to the documents, _ occurred. This shows that the judge ruled in favor of _ because _."
-        If no ruling is identified, reasoning should be in the format "The documents describe _, which does not identify the result of the trial."
-        Do not summarize the case or documents in reasoning. 
-        category should only include one of the following categories: plaintiff, defendant, undetermined.
+Respond with a JSON object in the format "{{"reasoning": "...", "category": "..."}}"
+If a ruling is identified, reasoning should be in the format "According to the documents, _ occurred. This shows that the judge ruled in favor of _ because _."
+If no ruling is identified, reasoning should be in the format "The documents describe _, which does not identify the result of the trial."
+Do not summarize the case or documents in reasoning. 
+category should only include one of the following categories: plaintiff, defendant, undetermined.
         """
         embedding_model_prompt = "Ruling for plaintiff or defendant in judgement, opinion, decision, or verdict."
 
@@ -75,4 +75,5 @@ class BenchRulingClassifier(VariableExtractor):
             variable_tag="category",
             null_value="undetermined",
             content_filter=content_filter,
-            title_filter=title_filter)
+            title_filter=title_filter,
+            document_separator="\n\n\n---NEW DOCUMENT---\n")

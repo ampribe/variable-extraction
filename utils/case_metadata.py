@@ -105,8 +105,8 @@ class CaseMetadata:
         determines whether case went to trial
         """
         text = str(self.get_docket_report_contents()).lower()
-        words = ["verdict", "opinion", "findings", "ruling", "judgement"]
-        return any((word in text for word in words)) and "trial" in text
+        words = ["verdict", "opinion", "ruling", "judgement", "judgment", "trial"]
+        return any((word in text for word in words))
 
     def categorize_trial_type(self) -> str:
         """
@@ -115,7 +115,7 @@ class CaseMetadata:
         """
         text = str(self.get_docket_report_contents()).lower()
         jury_words = ["juror", "jury", "verdict", "voir dire"]
-        bench_words = ["opinion", "bench brief", "findings", "bench ruling", "judgement"]
+        bench_words = ["opinion", "bench brief", "findings", "bench ruling", "judgement", "judgment"]
         if any((word in text for word in jury_words)):
             return "jury"
         if any((word in text for word in bench_words)):
@@ -161,10 +161,9 @@ class CaseMetadata:
             df.date = pd.to_datetime(df.date)
         if "entry_date" in df.columns:
             df.entry_date = pd.to_datetime(df.entry_date)
-        if "contents" in df.columns:
-            df.contents = df.contents.apply(
-                lambda html: BeautifulSoup(html, features="html.parser").text
-            )
+        df.contents = df.contents.apply(
+            lambda html: BeautifulSoup(html, features="html.parser").text
+        ) if "contents" in df.columns else df.apply(lambda x: "", axis=1)
         if "link_viewer" in df.columns:
             df["document_path"] = df.link_viewer.apply(get_document_path)
         return df
@@ -211,3 +210,21 @@ class CaseMetadata:
         and each downloaded file is a separate document
         """
         return self.get_downloaded_document_count() / self.get_total_document_count()
+
+    def get_metadata_path_from_document_folder(self, parent: str, document_folders: list[str]) -> list[str]:
+        """
+        Returns path to metadata file for all cases with document folder included in document_folders
+        document_folders: list of folders in the same directory as metadata.json for desired cases
+        """
+        paths = []
+        court_folders = [f.path for f in os.scandir(parent) if f.is_dir()]
+        case_folders = [f.path
+                        for court_folder in court_folders
+                        for f in os.scandir(court_folder)
+                        if f.is_dir and f.path[-4:] != ".txt"]
+        for folder in case_folders:
+            fs = [f.path for f in os.scandir(folder) if f.is_dir()]
+            if len(fs) > 0:
+                if fs[0].split("/")[-1] in document_folders:
+                    paths.append()
+        return paths

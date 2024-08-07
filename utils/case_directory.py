@@ -134,7 +134,7 @@ class CaseDirectory:
         """
         Writes case metadata with additional trial and trial type column s
         """
-        df = pd.DataFrame(self.get_metadata_json())
+        df = self.get_metadata_df()
         metadata = [CaseMetadata.from_metadata_path(path) for path in df.metadata_path]
 
         df["trial"] = [m.categorize_trial() for m in metadata]
