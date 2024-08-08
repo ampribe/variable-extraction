@@ -6,9 +6,8 @@ import numpy as np
 import pandas as pd
 import dill
 from utils.case_metadata import CaseMetadata
-from extractors.bench_ruling_classifier import BenchRulingClassifier
-from extractors.jury_ruling_classifier import JuryRulingClassifier
 from extractors.extractor_log import ExtractorLog
+from extractors.variable_extractor import VariableExtractor
 
 class CaseDirectory:
     """
@@ -158,9 +157,9 @@ class CaseDirectory:
         for i, (j, row) in enumerate(metadata[metadata.trial_type != "unknown"].iterrows()):
             print(f"\n\n\nClassifying case {i+1} of {tot}")
             if row.trial_type == "bench":
-                classifier = BenchRulingClassifier.from_metadata_path(f"{d}/../{row.metadata_path}")
+                classifier = VariableExtractor.from_metadata_path("bench_ruling", f"{d}/../{row.metadata_path}")
             else:
-                classifier = JuryRulingClassifier.from_metadata_path(f"{d}/../{row.metadata_path}")
+                classifier = VariableExtractor.from_metadata_path("jury_ruling", f"{d}/../{row.metadata_path}")
             metadata.loc[j, "result"], log = classifier.extract()
             logs.append(log)
 
@@ -176,9 +175,9 @@ class CaseDirectory:
         """
         metadata = CaseMetadata.from_metadata_path(path)
         if metadata.categorize_trial_type() == "jury":
-            c = JuryRulingClassifier(metadata)
-            return (c.extract(), c.log)
+            classifier = VariableExtractor.from_metadata_path("jury_ruling", path)
+            return (classifier.extract(), classifier.log)
         if metadata.categorize_trial_type() == "bench":
-            c = BenchRulingClassifier(metadata)
-            return (c.extract(), c.log)
+            classifier = VariableExtractor.from_metadata_path("bench_ruling", path)
+            return (classifier.extract(), classifier.log)
         return ("unknown", None)

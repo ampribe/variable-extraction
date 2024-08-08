@@ -4,16 +4,11 @@ This project extracts variables from court documents using retrieval-augmented g
 ```bash
 ├── extractors
 │   ├── __init__.py
-│   ├── bench_ruling_classifier.py
-│   ├── document_summarizer.py
 │   ├── extractor_config.py
 │   ├── extractor_log.py
-│   ├── jury_ruling_classifier.py
-│   ├── trial_type_classifier.py
 │   └── variable_extractor.py
 ├── tests
 │   ├── __init__.py
-│   ├── fed_key.csv
 │   └── test_fed.py
 ├── utils
 │   ├── __init__.py
@@ -24,7 +19,7 @@ This project extracts variables from court documents using retrieval-augmented g
 └── requirements.txt
 ```
 
-case_directory defines CaseDirectory, which provides general methods for handling a directory of cases. Individual case information is stored in a CaseMetadata object. The variable_extractor module defines VariableExtractor, a base class that requires ExtractorConfig and CaseMetadata objects to extract a variable from a court case. 
+case_directory defines CaseDirectory, which provides general methods for handling a directory of cases. Individual case information is stored in a CaseMetadata object. The variable_extractor module defines VariableExtractor, which requires ExtractorConfig and CaseMetadata objects to extract a variable from a court case. Default ExtractorConfig instances for extracting common variables can be found in ExtractorConfig.get_config. 
 
 ## Installation
 ### Prerequisites
@@ -49,12 +44,15 @@ venv\Scripts\activate (Windows)
 ```
 pip3 install -r requirements.txt
 ```
-4. Install necessary language models (llama3, mxbai-embed-large)
+4. Install ollama from [here](https://ollama.com/download)
+5. Install necessary language models (llama3.1, mxbai-embed-large are used by default)
 ```
-ollama pull llama3
+ollama pull llama3.1
 ollama pull mxbai-embed-large
 ```
 
 ## Usage
-### Testing
+A common error is that Jupyter may use the system Python kernel instead of Python from the virtual environment. As explained [here](https://stackoverflow.com/questions/37891550/jupyter-notebook-running-kernel-in-different-env), this can be resolved by running `python -m ipykernel install --user --name venv --display-name "venv Python"` and then selecting "venv Python" as the kernel in Jupyter. 
+
+## Testing
 To test on federal cases, create a directory `data` in the project directory and add 100_random_fed to `data`. Then, run `python3 -m tests.test_fed` from the project directory. This will create "results.csv" and "logs.pkl" files in the tests directory which can be loaded using the instructions in  `test_fed.py`.

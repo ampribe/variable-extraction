@@ -182,6 +182,9 @@ class CaseMetadata:
         return [Document(title) for title in self.get_docket_report_contents()]
 
     def get_documents(self) -> list[Document]:
+        """
+        returns list of downloaded documents
+        """
         docket_report = self.get_docket_report()
         if "contents" in docket_report.columns and "document_path" in docket_report.columns:
             docs_with_path = docket_report[docket_report.document_path != ""]

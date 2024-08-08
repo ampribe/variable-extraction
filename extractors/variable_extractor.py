@@ -1,10 +1,9 @@
 """
 Module includes VariableExtractor class
-VariableExtractor is a base class for variable extraction from an individual court case
+VariableExtractor implements variable extraction from an individual court case
 """
 import json
 from dataclasses import asdict
-from abc import ABC, abstractmethod
 import ollama
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import chromadb
@@ -13,41 +12,44 @@ from utils.document import Document
 from extractors.extractor_config import ExtractorConfig
 from extractors.extractor_log import ExtractorLog
 
-class VariableExtractor(ABC):
+class VariableExtractor:
     """
-    Provides base class for extracting variables from case (specified by metadata path)
-    Each subclass must implement _get_default_config
-    _get_default_con fig:Generates ExtractorCon from CaseMetadata object
-    Public Methods:
-        extract: extracts variable from case
+    VariableExtractor extracts desired variable from case using following process
+        first on docket_report then on documents themselves
+        filter by title -> chunk documents -> filter by keyword 
+        -> rank by semantic similarity -> generate context string -> query llm
+    parameters:
+        metadata: CaseMetadata for case to extract
+        config: ExtractorConfig for desired variable
+    public methods:
+        from_metadata_path: define extractor using path to case metadata and desired variable
+        extract: extract variable using ollama model
+        test_context: generates llm prompts and stores logs in self.log
+    attributes:
+        log: see extractor_log for details
     """
-    def __init__(self, metadata: CaseMetadata, config: ExtractorConfig|None = None) -> None:
+    def __init__(self, metadata: CaseMetadata, config: ExtractorConfig) -> None:
         """
         parameters:
             metadata: CaseMetadata of case to extract
             config: ExtractorConfig for this extractor
         """
         self.metadata = metadata
-        self.config = config if config is not None else self._get_default_config(metadata)
+        self.config = config
         self.log = ExtractorLog(
             config=asdict(self.config),
             metadata=self.metadata.get_metadata_json(fields=("court","title","docket","judges","link")))
 
-    @staticmethod
-    @abstractmethod
-    def _get_default_config(metadata: CaseMetadata) -> ExtractorConfig:
-        """
-        Generates default configuration for variable extractor 
-        Implemented by subclass
-        """
-
     @classmethod
-    def from_metadata_path(cls, path: str, config: ExtractorConfig|None=None)->"VariableExtractor":
+    def from_metadata_path(cls, variable: str, metadata_path: str)->"VariableExtractor":
         """
-        Initializes VariableExtractor from path to metadata
+        Generates variable extractor with correct config to extract variable provided
+        Parameters:
+            variable: See valid variables in ExtractorConfig.get_config
+            metadata_path: path to case metadata.json file
         """
-        metadata = CaseMetadata.from_metadata_path(path)
-        return cls(metadata, config)
+        metadata = CaseMetadata.from_metadata_path(metadata_path)
+        return cls(metadata, ExtractorConfig.get_config(variable, metadata))
 
     def _chunk_documents(self, docs: list[Document]) -> list[str]:
         """
@@ -95,16 +97,20 @@ class VariableExtractor(ABC):
 
     def _get_context_string(self, docs: list[Document]):
         """
-        Returns context string after filtering by title, chunking, filtering by keyword, and filtering by semantic similarity
+        Returns context string after filtering by title,
+        chunking, filtering by keyword, and filtering by semantic similarity
         """
         docs_after_title_filter = [doc for doc in docs if self.config.title_filter(doc.title)]
         chunks = self._chunk_documents(docs_after_title_filter)
-        chunks_after_keyword_filter = [chunk for chunk in chunks if self.config.content_filter(chunk)]
+        chunks_after_keyword_filter = [chunk
+                                       for chunk in chunks
+                                       if self.config.content_filter(chunk)]
         chunks_after_semantic_filter = self._filter_by_semantic_similarity(chunks_after_keyword_filter)
         context = self.config.document_separator.join(chunks_after_semantic_filter)
+        full_prompt = self.config.document_separator.join([self.config.language_model_prompt] + chunks_after_semantic_filter)
         log = {"docs": docs, "docs_after_title_filter": docs_after_title_filter,
                 "chunks": chunks, "chunks_after_keyword_filter": chunks_after_keyword_filter,
-                "chunks_after_semantic_filter": chunks_after_semantic_filter, "context": context}
+                "chunks_after_semantic_filter": chunks_after_semantic_filter, "context": context, "full_prompt": full_prompt}
         return (context, log)
 
     def _query_llm(self, context_string: str) -> tuple[str, str]:
@@ -115,13 +121,13 @@ class VariableExtractor(ABC):
         returns:
             tuple[variable value, full response]
         """
-        response = ollama.generate(
+        response = ollama.generate( # pylint: disable=unsubscriptable-object
             model=self.config.language_model,
             prompt=context_string,
             system=self.config.language_model_prompt,
             options={"num_ctx": self.config.llm_context_length},
             format="json",
-        )["response"] # pylint: disable=unsubscriptable-object
+        )["response"]
         try:
             return (json.loads(response)[self.config.variable_tag], response)
         except: # pylint: disable=bare-except
@@ -173,10 +179,12 @@ class VariableExtractor(ABC):
         return variable value, stores log in self.log
         """
         metadata_resp = self._extract_from_metadata()
-        resp = metadata_resp if metadata_resp != self.config.null_value else self._extract_from_documents()
+        resp = (metadata_resp
+                if metadata_resp != self.config.null_value
+                else self._extract_from_documents())
         print(resp)
         return resp
-    
+
     def test_context(self) -> None:
         """
         Generates context strings for both metadata and document searches

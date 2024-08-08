@@ -1,3 +1,6 @@
+"""
+Includes Document class for handling individual case documents
+"""
 from dataclasses import dataclass
 from typing import Optional
 import os
@@ -5,11 +8,20 @@ import regex as re
 
 @dataclass
 class Document:
+    """
+    the Document class stores individual case documents and provides document cleaning methods
+    Parameters:
+        title: title of document (used as content if path is missing eg. for docket_report entry)
+        path: path to document txt file
+    """
     title: str
     path: Optional[str] = None
 
     @property
     def content(self) -> str:
+        """
+        Loads document content, uses title if no path
+        """
         if self.path is None:
             return self.title
         if os.path.isfile(self.path):
@@ -19,11 +31,13 @@ class Document:
 
     @property
     def content_clean(self) -> str:
+        """
+        Returns clean version of content
+        by applying each regex substitution defined below
+        """
         content = self.content
         subs = [
-            {"pattern": r"(\d[\s|\W])+",
-             "description": "Remove extraneous numbers"},
-             {"pattern": r"(\d\n)+",
+             {"pattern": r"(\s+\d+){2,}",
               "description": "remove columns of numbers"},
              {"pattern": r"Filed (\d+\/)*\d+",
               "description": "Remove filing date"},
