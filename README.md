@@ -7,19 +7,19 @@ This project extracts variables from court documents using retrieval-augmented g
 │   ├── extractor_config.py
 │   ├── extractor_log.py
 │   └── variable_extractor.py
-├── tests
-│   ├── __init__.py
-│   └── test_fed.py
 ├── utils
 │   ├── __init__.py
 │   ├── case_directory.py
 │   ├── case_metadata.py
 │   └── document.py
+├── notebooks
+│   ├── compare_trial_classification.ipynb
+│   └── visualize_tests.ipynb
 ├── README.md
 └── requirements.txt
 ```
 
-case_directory defines CaseDirectory, which provides general methods for handling a directory of cases. Individual case information is stored in a CaseMetadata object. The variable_extractor module defines VariableExtractor, which requires ExtractorConfig and CaseMetadata objects to extract a variable from a court case. Default ExtractorConfig instances for extracting common variables can be found in ExtractorConfig.get_config. 
+The `case_directory` module defines `CaseDirectory`, which provides general methods for handling a directory of cases. Individual case information is stored in a `CaseMetadata` object. The `variable_extractor` module defines `VariableExtractor`, which requires `ExtractorConfig` and `CaseMetadata` objects to extract a variable from a court case. Default `ExtractorConfig` instances for extracting common variables can be found in `ExtractorConfig.get_config`. 
 
 ## Installation
 ### Prerequisites

@@ -7,10 +7,10 @@ from dataclasses import asdict
 import ollama
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import chromadb
-from utils.case_metadata import CaseMetadata
-from utils.document import Document
-from extractors.extractor_config import ExtractorConfig
-from extractors.extractor_log import ExtractorLog
+from ..utils.case_metadata import CaseMetadata
+from ..utils.document import Document
+from .extractor_config import ExtractorConfig
+from .extractor_log import ExtractorLog
 
 class VariableExtractor:
     """

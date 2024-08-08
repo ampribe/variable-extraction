@@ -7,7 +7,7 @@ import warnings
 from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
 import numpy as np
 import pandas as pd
-from utils.document import Document
+from .document import Document
 
 warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 

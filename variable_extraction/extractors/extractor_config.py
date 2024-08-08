@@ -3,7 +3,7 @@ This module defines ExtractorConfig, which provides RAG settings for VariableExt
 """
 from typing import Callable
 from dataclasses import dataclass
-from utils.case_metadata import CaseMetadata
+from ..utils.case_metadata import CaseMetadata
 
 @dataclass
 class ExtractorConfig:

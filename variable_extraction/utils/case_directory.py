@@ -5,9 +5,9 @@ import os
 import numpy as np
 import pandas as pd
 import dill
-from utils.case_metadata import CaseMetadata
-from extractors.extractor_log import ExtractorLog
-from extractors.variable_extractor import VariableExtractor
+from .case_metadata import CaseMetadata
+from ..extractors.extractor_log import ExtractorLog
+from ..extractors.variable_extractor import VariableExtractor
 
 class CaseDirectory:
     """
@@ -172,6 +172,8 @@ class CaseDirectory:
         """
         Categorizes case outcome as plaintiff, defendant, or unknown
         returns log along with result
+        parameters:
+            path: path to metadata file generated using write_metadata
         """
         metadata = CaseMetadata.from_metadata_path(path)
         if metadata.categorize_trial_type() == "jury":
@@ -181,3 +183,45 @@ class CaseDirectory:
             classifier = VariableExtractor.from_metadata_path("bench_ruling", path)
             return (classifier.extract(), classifier.log)
         return ("unknown", None)
+
+    @staticmethod
+    def get_prompt_logs(metadata_path: str) -> list[ExtractorLog]:
+        """
+        Generate trial outcome classification prompt and record logs
+        parameters:
+            metadata_path: path to metadata file generated using write_metadata
+        """
+        d = os.path.dirname(os.path.abspath(__file__))
+        metadata = pd.read_csv(metadata_path)
+        logs = []
+        trial_cases = metadata[(metadata.trial_type == "jury") | (metadata.trial_type == "bench")].reset_index(drop=True)
+        for i, row in enumerate(trial_cases.iterrows()):
+            print(f"Generating prompt for case {i+1} of {len(trial_cases)}")
+            if row.trial_type == "bench":
+                classifier = VariableExtractor.from_metadata_path("bench_ruling", f"{d}/../{row.metadata_path}")
+            else:
+                classifier = VariableExtractor.from_metadata_path("jury_ruling", f"{d}/../{row.metadata_path}")
+            classifier.test_context()
+            logs.append(classifier.log)
+        return logs
+
+    @staticmethod
+    def get_prompts(metadata_path: str) -> pd.DataFrame:
+        """
+        Generate trial outcome classification prompts and returns as dataframe
+        parameters:
+            metadata_path: path to metadata file generated using write_metadata
+        """
+        d = os.path.dirname(os.path.abspath(__file__))
+        metadata = pd.read_csv(metadata_path)
+        trial_cases = metadata[(metadata.trial_type == "jury") | (metadata.trial_type == "bench")].reset_index(drop=True)
+        for i, row in enumerate(trial_cases.iterrows()):
+            print(f"Generating prompt for case {i+1} of {len(trial_cases)}")
+            if row.trial_type == "bench":
+                classifier = VariableExtractor.from_metadata_path("bench_ruling", f"{d}/../{row.metadata_path}")
+            else:
+                classifier = VariableExtractor.from_metadata_path("jury_ruling", f"{d}/../{row.metadata_path}")
+            classifier.test_context()
+            trial_cases.loc[i, "metadata_prompt"] = classifier.log.metadata_classification["full_prompt"]
+            trial_cases.loc[i, "document_prompt"] = classifier.log.document_classification["full_prompt"]
+        return trial_cases
